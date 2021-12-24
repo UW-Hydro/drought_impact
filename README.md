@@ -1,4 +1,4 @@
-# Social & Economic Drought Impacts (SEDI)
+# Socio-Economic Drought Impacts (SEDI)
 
 Proposal Title: Improving Drought Indicators to Support Drought Impact Mitigation for Natural Resource Managment    
 Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping with Drought    
