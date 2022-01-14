@@ -9,6 +9,7 @@ Author: a. stein
 
 import xarray as xr
 import pandas as pd
+import numpy as np
 import rioxarray
 
 def clip_da_by_geometry(data:xr.DataArray, geometry:pd.Series, crs, path='raster.tif', time=None, save_raster=True):
