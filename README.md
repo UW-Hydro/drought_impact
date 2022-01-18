@@ -6,7 +6,7 @@ Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping w
 Researchers: adi stein, Bart Nijssen, Katherine Hegewisch, John Abatzoglou    
 README author: adi stein
 
-Updated: 12.22.2021    
+Updated: 1.18.2022    
 
 ------------------------------------------
 
@@ -19,6 +19,12 @@ A note on perspective: I am a graduated student at the UW studying Hydrology thr
 -------------------------------------------
 
 ## State of Project
+
+1.18.2022
+
+I have managed to get more drought indicator data from OPeNDAP and well as become fairly familiar with how to manipulate it. Currently I am contemplating how to look at differences between the indicators ... but there is such a large spatial and temporal variation that makes aggregation tricky. For more scientific purposes I'll eventually need to evaluate how much data is lost in aggregation (think KL Divergence would be good for this) but for now I think I'll settle by reducing scale to just some national parks. Speaking of which, finally found some GIS data for the national parks, located [here](https://public-nps.opendata.arcgis.com/datasets/nps-boundary-1/explore?location=39.273308%2C-117.638430%2C5.00) ... so now I need to improve my querying ...
+
+12.22.2021 Post
 
 Was examining national park data in comparison to FDSI. This resulted in no correlation nor shared characteristics among the distributions at Mt. Rainier National Park. Given the time period incorporated a range of values for FDSI, and none of the other national parks had values varying that drastically in shape from Mt. Rainier National Park, I am hesitant to spend more time looking for park shape files just to compare FDSI more. Aggregation metrics such as mean, median, max, and min where used to characterize both FDSI and the visitation data, yet neither yielded a notable pattern. It would be then more worthwhile to examine how the different drought indicators used (including those that are purely hydrologic or meteorologic but still used by stakeholders) differ before returning to look at a relationship with park visitation.
 
