@@ -6,7 +6,7 @@ Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping w
 Researchers: adi stein, Bart Nijssen, Katherine Hegewisch, John Abatzoglou    
 README author: adi stein
 
-Updated: 1.18.2022    
+Updated: 2.4.2022    
 
 ------------------------------------------
 
@@ -19,6 +19,16 @@ A note on perspective: I am a graduated student at the UW studying Hydrology thr
 -------------------------------------------
 
 ## State of Project
+
+2.4.2022
+
+This past Tuesday was the Coping With Drought PI meeting, which was helpful to reflect on a few different things for this project. It seemed that nearly every team was struggling with impacts. Some managed to identify hazards that could lead to impacts but impacts, being material consequences that people experience from drought, were slipping from people's hands for the most part. Analyzing hazards presents the opportunity to look at the root of impacts and attempt to forecast them, but without confirmation that that is folks experience outside the ivory tower, it's still not much better than where we started. I say that not to disqualify anyone's work as I am also in the same place of not having much stakeholder interaction, but to acknowledge the difference between impacts and hazards and be cautious of the conclusions we draw from them. Considering this puts into perspective the scientific drought indicators I've been looking at.
+
+The CWD meeting also brought to light that it'll likely be next-to-impossible to get economic data disaggregated to the point of specific industries such as rafting. So I can do some more general analysis with the higher up patterns, but looking closer doesn't look likely ... which is sadly what I need to connect some dots. [IMPLAN](https://support.implan.com/hc/en-us/articles/115009674428-IMPLAN-Sectoring-NAICS-Correspondences) was suggested by Alvar from Public Policy Institute of California (PPIC), and John said he may know someone who uses it a lot ... so I'll look into it and see if I actually want to use it or not.
+
+In conversation with Katherine about FDSI, it's impact on park visitation may be lagged or have some form of cumulative effect ... I should look at how FDSI visably shows up on trees or impacts canopy cover if I want to pursue that. If possible, we might be able to mine social media to look for trends in discussion about different parks/businesses to better understand what makes an experience favorable/unfavorable and therefore influence business in the future by a word-of-mouth model. 
+
+Hunting and Fishing licenses from OR have also been gathered and organized now, I'm starting to look into what I can learn from them. Unfortunately they are only from 2016-2020 ... as with other data being rather receent too ... so I may need to consult with a statistician on how best to deal with short term data. Not to mention that COVID-19 has likely impacted data.
 
 1.18.2022
 
