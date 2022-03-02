@@ -28,6 +28,8 @@ Regarding the IMPLAN data, I did end up checking it out and was unable to find d
 
 Now I am taking a step back from drought metrics to find correlations with temperature as this has been promising in other works (including found in a quick plot by John). Once that is developed I can work on adding more information to try and connect visitations and licenses to drought signals. This will likely involve examining different time scales.
 
+I am also going to be doing some data reorganizing, which make break some paths but they should be easily repairable if needed in the future.
+
 Lastly, Katherine is working on compiling some fire burn data that we found through [WFAS](http://www.wfas.net/) ... which should provide us with a more promising historic record of fire danger rating. 
 
 2.4.2022
