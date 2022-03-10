@@ -11,6 +11,8 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import rioxarray
+from shapely.geometry import mapping
+
 
 def cunnane_empircal_cdf(data):
     """Creates an empircal cdf based on cunnane positions.
