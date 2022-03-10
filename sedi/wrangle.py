@@ -12,65 +12,6 @@ import pandas as pd
 import numpy as np
 import rioxarray
 
-def clip_da_by_geometry(data:xr.DataArray, geometry:pd.Series, crs, path='raster.tif', time=None, save_raster=True):
-    """Clip DataArray by GeoDataFrame.
-
-    Using a DataArray with lat/lon coordinates, this function 
-    creates a raster tif file that can then be manipulated and
-    clipped to the area described by the GeoDataFrame.
-
-    Parameters
-    ----------
-    data: xr.DataArray
-        Contains a single variable defined by at least lat-lon
-        coordinates. If also defined by time, provide another
-        xr.DataArray in `time` to correctly set the variable
-        later.
-    geometery: polygon shape
-        Contains the area to clip out
-    crs
-        The crs to use, should match geometery given.
-    path: str (optional)
-        Where to save the raster file created in the process.
-        If none given, saves in current directory as
-        'raster.tif'. Make certain to specify as a `.tif`.
-        If you do not want this file to remain in your
-        directory, set save_raster to False.
-    time: xr.DataArray (optional)
-        Describes the time coordinate of 
-    save_raster: boolean (optional)
-        Whether to retain the raster file created in the process.
-        Defaults as True to retain the file. Setting it to
-        False will delete the file created without impacted
-        the returned DataArray.
-
-    Returns
-    -------
-    xr.DataArray
-        Clipped data to geometry. In creating a raster, 
-    
-    """
-    try:
-        os.remove(path)
-    except:
-        pass
-    data.rio.to_raster(path)
-    raster = rioxarray.open_rasterio(path, masked=True)
-
-    raster.rio.write_crs(crs, inplace=True)
-    clipped_raster = raster.rio.clip(geometry, crs)
-
-    # fix naming
-    clipped_raster = clipped_raster.rename({'y':'lat', 'x':'lon'})
-    if isinstance(time, xr.DataArray):
-        clipped_raster['band'] = time.values
-        clipped_raster = clipped_raster.rename({'band':time.name})
-
-    if not save_raster:
-        os.remove(path)
-        
-    return clipped_raster
-
 def cunnane_empircal_cdf(data):
     """Creates an empircal cdf based on cunnane positions.
 
@@ -173,4 +114,102 @@ def da_summary_stats(da:xr.DataArray, stats, groupby="time.month"):
         return computed_stats[0]
     else:
         return computed_stats
+
+def clip_xarray(da:xr.DataArray, gdf:gpd.GeoDataFrame, drop=True, all_touched=True):
+    """Wrapper for rio.clip.
+
+    https://corteva.github.io/rioxarray/stable/rioxarray.html#rioxarray.raster_array.RasterArray.clip
+
+    This function will not alter either da or gdf, it creates a copy of da to
+    prevent this specifically.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Data to be clipped, must contain longitude and latitude as lon and lat.
+    gdf : gpd.GeoDataFrame
+        Contains region to clip da to. Must have a crs and geometry specified.
+    drop : boolean, (optional)
+        Whether to remove pixels clipped outside of the gdf geometry or retain
+        them as masked. Defaults as True to remove pixels.
+    all_touched : boolean, (optional)
+        Whether to include pixels that touch the geometry (True) or just those
+        who have centroids within the geometry (False). Defaults as True.
+    
+    Returns
+    -------
+    xr.DataArray
+        da clipped to gdf geometry with the crs from gdf.
+    
+    """
+    da = da.copy()
+    if da.rio.crs != gdf.crs:
+        raise Exception('da and gdf CRS do not match, please fix matching')
+
+    clipped = da.rio.clip(gdf.geometry.apply(mapping), gdf.crs, drop=drop, all_touched=all_touched)
+
+    # get rid of the copy we made
+    da = None
+
+    return clipped
+
+def xarray_clip_combine_years(data_path:str, years, combine_var:str, clip_gdf:gpd.GeoDataFrame):
+    """Load, clip, then combine several years of netcdf data.
+
+    This came about as I was looking to combine several years of data that covered all of CONUS,
+    but only needed data for Washington and Oregon. I kept using xr.open_mfdataset() but finding
+    it struggling with the large amounts of data. So this function instead opens each file 
+    individually, clips it to the desired region (using clip_xarray), then combining all
+    the data after. Data is unloaded in-between each year to minimize active memory taken up.
+
+    Parameters
+    ----------
+    data_path : str
+        Location of files to be combined. It is expected that the files follow the same naming
+        convention, only changing the year at the end so that they can be opened with the string
+        f'{data_path}{year}.nc' for each year provided in years. For example, if you wanted to
+        combined a bunch of precipitation files called 'precip_1979.nc', 'precip_1980.nc', ... etc.
+        then you would provide the path to those files plus 'precip_' at the end of the string.
+        It is expected that the netcdf files have spatial dimensions and a crs set that is 
+        accessible by rioxarray.
+    years : list-like, iterable
+        What years to combine the data from. If you wanted to combine all data from 1979 to
+        2022 for example, then np.arange(1979, 2023, 1) would satisfy this parameter.
+    combine_var : str
+       What variable in the netcdf files to combine by. Note this requires all of the files
+       you are combining to use the same variable name.
+    clip_gdf : gpd.GeoDataFrame
+        Contains geometry to clip the netcdf files to and must posses the same crs as the
+        netcdf files, otherwise an Exception will be thrown.
+
+    Returns
+    -------
+    xr.Dataset
+        Contains data clipped to clip_gdf for all years provided in a single Dataset.
+    """
+    all_data_list = []
+    t = tqdm(years, total=len(years))
+    for year in t:
+        t.set_description(f'{year}')
+        data_ds = xr.open_dataset(f'{data_path}{year}.nc')
+        # double check matching CRS
+        if data_ds.rio.crs != clip_gdf.crs:
+            raise Exception(f'{data_path}{year}.nc does not match the CRS of clip_gdf')
+        
+        # clip and set crs for dataarray
+        data_da = data_ds[combine_var]
+        data_da = data_da.rio.write_crs(data_ds.rio.crs)
+        clipped_data_da = clip_xarray(data_da, clip_gdf)
+
+        # add it to our list for later combining
+        all_data_list.append(clipped_data_da)
+
+        # clean up some of our variables to free up storage
+        data_da = None
+        data_ds = None
+        clipped_data_da = None
+
+    all_data_ds = xr.combine_by_coords(all_data_list)
+
+    return all_data_ds
 
