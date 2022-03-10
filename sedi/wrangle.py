@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import rioxarray
 from shapely.geometry import mapping
+import geopandas as gpd
 
 
 def cunnane_empircal_cdf(data):
