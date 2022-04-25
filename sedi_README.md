@@ -6,7 +6,7 @@ Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping w
 Researchers: adi stein, Bart Nijssen, Katherine Hegewisch, John Abatzoglou    
 README author: adi stein
 
-Updated: 3.2.2022    
+Updated: 4.25.2022    
 
 ------------------------------------------
 
