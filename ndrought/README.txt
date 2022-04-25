@@ -1,1 +1,1 @@
-The SEDI, Socio-Economic Drought Impacts, package contains supporting code for evaluating socio-economic drought impacts.
+The ndrought package, examining n dimensions of drought, contains functionality for wrangling and comparing various forms of drought.
