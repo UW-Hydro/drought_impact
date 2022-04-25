@@ -20,6 +20,10 @@ A note on perspective: I am a graduated student at the UW studying Hydrology thr
 
 ## State of Project
 
+4.25.2022
+
+A little late of an update, but effectively this focus of the project is being dropped as a signal between national park data and drought was not clear nor really identifiable, so we moved on to the USDM evaluation focus, see the new README for more info.
+
 3.2.2022
 
 Recently I was delving into the Twitter API in attempts to use geo-tagged Tweet frequency as a proxy for visitation at our sites of interest, following a similar methodology to [Wilkins et al.](https://www.nature.com/articles/s41598-021-82145-z) with Flickr data. I have developed a workflow to gather data that has geo-spatial tags throughout the entire Twitter archive (since 2006) but there are unfortunately not many geo-tagged tweets that have the keywords I was using (national park names). The geo-tagging is important to be able to associate the tweet with actually being at the park (instead of just talking about the park or sharing a news story about it). As far as I can tell, (they do not have very descriptive documentation), other papers that I have seen do similar work are selecting social media data through their geo-tags around there are of interest (as I did). I might be able to do some analysis on how often each recreation site is mentioned throughout the year (similar to something like Google Trends), but it would not have a spatial dimension and I am not familiar with how to filter out noise for that. So I am going to move on and do analysis for the national and state parks with the data we already have since I was able to find geometries for them, then perhaps try social media data down the road if it becomes relevant again. This exploration still felt worthwhile given the various papers I looked at and now having more knowledge about the process. 
