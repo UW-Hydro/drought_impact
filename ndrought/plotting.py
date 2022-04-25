@@ -126,3 +126,49 @@ def plot_summary_stats(da:xr.DataArray, ax=None, line_colors=['k','r','b'], std_
 
     return ax
 
+def scatter_linregress(x:np.ndarray, y:np.ndarray, ax=None, title_var=None):
+    """Create a scatter between x and y and perform linear regression.
+
+    Parameters
+    ----------
+    x, y : np.ndarray
+        1D data to plot against each other with an equal number of values each.
+    ax : matplotlib axis, (optional)
+        Where to plot the scatter plot. One will be created with default settings
+        if none is provided.
+    title_var : str, (optional)
+        Additional specification for title label. R-squared value will be displayed
+        in the title regardless.
+
+    Returns
+    -------
+    ax
+        Axis object containing created plot.
+    """
+
+    if ax is None:
+        __, ax = plt.subplots()
+
+    if len(x) != len(y):
+        raise Exception('x and y do not have an equal number of points, they cannot be paired for scatter')
+
+    x_reshape = x.reshape((-1, 1))
+
+    model = LinearRegression().fit(x_reshape, y)
+    #model.fit(x_reshape.squeeze(), y.squeeze())
+    r_sq = model.score(x_reshape, y)
+
+    x_new = np.arange(x.min(), x.max()).reshape((-1,1))
+    y_new = model.predict(x_new)
+
+    ax.scatter(x, y)
+    ax.plot(x_new, y_new, linestyle='--', color='r')
+
+    if title_var and isinstance(title_var, str):
+        ax.set_title(f'{title_var}, '+r'$R^2$'+f' = {r_sq:.3f}')
+    else:
+        ax.set_title(r'$R^2$'+f' = {r_sq:.3f}')
+
+    return ax
+
+    

@@ -216,3 +216,51 @@ def xarray_clip_combine_years(data_path:str, years, combine_var:str, clip_gdf:gp
 
     return all_data_ds
 
+def threshold_filtered_pair(x:np.ndarray, y:np.ndarray, minx=None, maxx=None, miny=None, maxy=None):
+    """Filter for x and y based on a threshold to either, assuming 1:1 mapping.
+
+    Parameters 
+    ----------
+    x, y : np.ndarray
+        Array of values that assumes x and y are mapped 1:1 and ordered, such that 
+        the first element of x maps to the first element of y, and so forth.
+    minx, miny : float, (optional)
+        Minimum inclusive threshold for x and y, respectively.
+    maxx,y maxy : float, (optional)
+        Maximum inclusive threshold for x and y, respectively.
+
+    Returns
+    -------
+    x, y : np.ndarray
+        x and y filtered based on the provided thresholds, respectively.
+    """
+    # for each of these, if a threshold isn't provided then
+    # we need to have an array that contains all of the indices
+    if minx:
+        x_above_floor = np.where(x>=minx)[0]
+    else:
+        x_above_floor = np.arange(0, len(x))
+
+    if maxx:
+        x_below_ceiling = np.where(x<=maxx)[0]
+    else:
+        x_below_ceiling = np.arange(0, len(x))
+
+    if miny:
+        y_above_floor = np.where(y>=miny)[0]
+    else:
+        y_above_floor = np.arange(0, len(y))
+    
+    if maxy:
+        y_below_ceiling = np.where(y<=maxy)[0]
+    else:
+        y_below_ceiling = np.arange(0, len(y))
+
+    # find common indices to select out
+    x_filter_idx = np.intersect1d(x_above_floor, x_below_ceiling)
+    y_filter_idx = np.intersect1d(y_above_floor, y_below_ceiling)
+    filter_idx = np.intersect1d(x_filter_idx, y_filter_idx)
+
+    return x[filter_idx], y[filter_idx]
+
+    
