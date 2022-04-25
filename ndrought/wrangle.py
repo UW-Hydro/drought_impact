@@ -1,6 +1,6 @@
 """ Support for wrangling data and organizing it.
 
-This module contains various helper functions for accessing, converting, and manipulating data used in SEDI.
+This module contains various helper functions for accessing, converting, and manipulating data used in nDrought.
 
 Updated: 12.22.2021
 Author: a. stein
