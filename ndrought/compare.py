@@ -42,3 +42,22 @@ def spi_to_usdmcat(spi_da:xr.DataArray):
     spi_da_copy.loc[:,:] = spi_da_vals
 
     return spi_da_copy
+
+def spi_to_usdmcat_multtime(spi_ds:xr.Dataset):
+    """Categorizes SPI based on USDM categories for multiple times.
+    
+    See spi_to_usdmcat for further documentation.
+    
+    Parameters
+    ----------
+    spi_ds : xr.Dataset
+        SPI at multiple time values as the coordinate 'day'.
+    
+    Returns
+    -------
+    xr.Dataset
+        SPI categorized by spi_to_usdmcat.
+    """
+    
+    return spi_to_usdmcat(xr.concat([spi_ds.sel(day=day) for day in spi_ds['day'].values], dim='day'))
+
