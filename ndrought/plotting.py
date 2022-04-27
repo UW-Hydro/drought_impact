@@ -171,4 +171,16 @@ def scatter_linregress(x:np.ndarray, y:np.ndarray, ax=None, title_var=None):
 
     return ax
 
+def usdm_cmap():
+    """Approximates the USDM colormap.
     
+    Uses the mapping neutral:-1, D0:0, D1:1, D2:2, D3:3, D4:4.
+
+    Returns
+    -------
+    matplotlib LinearSegmentedColormap
+
+    """
+    usdm_colors=["white","yellow","navajowhite","orange","crimson","darkred"]
+    return mpl.colors.LinearSegmentedColormap.from_list("UDSM", usdm_colors)
+

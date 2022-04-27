@@ -1,4 +1,5 @@
 import xarray as xr
+import pandas as pd
 
 def spi_to_usdmcat(spi_da:xr.DataArray):
     """Categorizes SPI based on USDM categories.
@@ -60,4 +61,59 @@ def spi_to_usdmcat_multtime(spi_ds:xr.Dataset):
     """
     
     return spi_to_usdmcat(xr.concat([spi_ds.sel(day=day) for day in spi_ds['day'].values], dim='day'))
+
+def pair_to_usdm_date(usdm_dates, other_dates, other_name:str):
+    """Pairs dates from one metric to USDM dates for comparison.
+
+    The USDM cuts off receiving data on Tuesday mornings before eventually
+    publishing their maps on Thusdays. This function finds which date is
+    closest to the cutoff date for the USDM (that Tuesday) and pairs it
+    with that date as the most recent data that could have been considered
+    in the USDM. Note that this was developed for SPI that has a greater
+    frequency than USDM and should be double checked before using a measure
+    with a lower frequency.
+
+    Parameters
+    ----------
+    usdm_dates: DateTimeIndex
+        Array of dates from USDM measurements.
+    other_dates: DateTimeIndex
+        Array of dates to pair to USDM dates.
+    other_name: str
+        Name of the other dates.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame where each row pairs an other_date to a usdm_date.
+    """
+
+    # setup and grab the day of the week
+    pair_dates = pd.DataFrame(pd.Series(other_dates, name=other_name))
+    pair_dates['DoW'] = other_dates.dayofweek
+    #return pair_dates
+    
+    # figure out how many days till the next Tuesday for USDM cutoff
+    dtt_dict = {0:1, 1:0, 2:6, 3:5, 4:4, 5:3, 6:2}
+    pair_dates['DtTue'] = [dtt_dict[day] for day in pair_dates['DoW'].values]
+
+    # figure out if that is the closest to the USDM cutoff Tuesday to be used
+    pair_dates['Pull'] = np.zeros(len(pair_dates))
+
+    dtt_all = pair_dates['DtTue'].values
+    for i, dtt_i in enumerate(dtt_all):
+        if i < len(pair_dates)-1:
+            if dtt_i < dtt_all[i+1]:
+                pair_dates['Pull'].iloc[i] = 1
+
+    # now select out the dates we want
+    pair_dates = pair_dates[pair_dates['Pull'] == 1]
+    # and match them with their USDM dates
+    pair_dates['USDM Date'] = usdm_dates
+    # reset the index
+    pair_dates = pair_dates.reset_index()
+    # and make sure to drop pandas trying to preserve the old index
+    pair_dates = pair_dates.drop(columns='index')
+
+    return pair_dates[[other_name, 'USDM Date']]
 
