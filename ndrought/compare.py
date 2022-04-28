@@ -1,5 +1,6 @@
 import xarray as xr
 import pandas as pd
+import numpy as np
 
 def spi_to_usdmcat(spi_da:xr.DataArray):
     """Categorizes SPI based on USDM categories.
@@ -62,7 +63,7 @@ def spi_to_usdmcat_multtime(spi_ds:xr.Dataset):
     
     return spi_to_usdmcat(xr.concat([spi_ds.sel(day=day) for day in spi_ds['day'].values], dim='day'))
 
-def pair_to_usdm_date(usdm_dates, other_dates, other_name:str):
+def pair_to_usdm_date(usdm_dates:pd.DatetimeIndex, other_dates:pd.DatetimeIndex, other_name:str, realign=False):
     """Pairs dates from one metric to USDM dates for comparison.
 
     The USDM cuts off receiving data on Tuesday mornings before eventually
@@ -72,6 +73,9 @@ def pair_to_usdm_date(usdm_dates, other_dates, other_name:str):
     in the USDM. Note that this was developed for SPI that has a greater
     frequency than USDM and should be double checked before using a measure
     with a lower frequency.
+
+    WARNING: There is not currently a catch if there are too many dates provided,
+    (such as when the other date range exceeds the USDM date range)
 
     Parameters
     ----------
@@ -88,10 +92,21 @@ def pair_to_usdm_date(usdm_dates, other_dates, other_name:str):
         DataFrame where each row pairs an other_date to a usdm_date.
     """
 
+    # check if times are too far out of alignment
+    if usdm_dates[-1] - pd.Timedelta(days=7) > other_dates[-1]:
+        if realign:
+            usdm_dates = usdm_dates[usdm_dates <= other_dates[-1] + pd.Timedelta(days=7)]
+        else:
+            raise Exception('USDM dates extends more than a week beyond other dates, resulting in an inability to pair. Please adjust USDM dates accordingly or set realign=True to (experimentally) automatically correct.')
+    if other_dates[0] + pd.Timedelta(days=7) < usdm_dates[-1]:
+        if realign:
+            other_dates = other_dates[other_dates >= usdm_dates[0] - pd.Timedelta(days=7)]
+        else:
+            raise Exception('Other dates extends more than a week prior to USDM dates, resulting in an inability to pair. Please adjust other dates accordingly or set realign=True to (experimentally) automatically correct')
+
     # setup and grab the day of the week
     pair_dates = pd.DataFrame(pd.Series(other_dates, name=other_name))
     pair_dates['DoW'] = other_dates.dayofweek
-    #return pair_dates
     
     # figure out how many days till the next Tuesday for USDM cutoff
     dtt_dict = {0:1, 1:0, 2:6, 3:5, 4:4, 5:3, 6:2}
