@@ -2,8 +2,12 @@ import xarray as xr
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 
-from wrangle import da_summary_stats
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+
+from ndrought.wrangle import da_summary_stats
 
 
 def plot_moy_overlay(da: xr.DataArray, ax=None, start_year=None, end_year=None, 
@@ -126,7 +130,7 @@ def plot_summary_stats(da:xr.DataArray, ax=None, line_colors=['k','r','b'], std_
 
     return ax
 
-def scatter_linregress(x:np.ndarray, y:np.ndarray, ax=None, title_var=None):
+def scatter_linregress(x:np.ndarray, y:np.ndarray, ax=None, title_var=None, model_color='r', **scatter_kwargs):
     """Create a scatter between x and y and perform linear regression.
 
     Parameters
@@ -158,11 +162,11 @@ def scatter_linregress(x:np.ndarray, y:np.ndarray, ax=None, title_var=None):
     #model.fit(x_reshape.squeeze(), y.squeeze())
     r_sq = model.score(x_reshape, y)
 
-    x_new = np.arange(x.min(), x.max()).reshape((-1,1))
+    x_new = np.linspace(x.min(), x.max()).reshape((-1,1))
     y_new = model.predict(x_new)
 
-    ax.scatter(x, y)
-    ax.plot(x_new, y_new, linestyle='--', color='r')
+    ax.scatter(x, y, **scatter_kwargs)
+    ax.plot(x_new, y_new, linestyle='--', color=model_color)
 
     if title_var and isinstance(title_var, str):
         ax.set_title(f'{title_var}, '+r'$R^2$'+f' = {r_sq:.3f}')

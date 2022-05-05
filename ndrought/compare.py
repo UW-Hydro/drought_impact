@@ -72,8 +72,14 @@ def pair_to_usdm_date(usdm_dates:pd.DatetimeIndex, other_dates:pd.DatetimeIndex,
     that has a greater frequency than USDM and should be double checked before 
     using a measure with a lower frequency.
 
-    WARNING: There is not currently a catch if there are too many dates provided,
-    (such as when the other date range exceeds the USDM date range)
+    WARNING: The current catch for too-many dates provided is experimental.
+
+    NOTE: The USDM considers data up UNTIL the Tuesday morning before maps are
+    released on Thursday. A more robust analysis should determine if there is a
+    time cuttoff that would exclude maps on Tuesday as well as integrate any map
+    made since the previous Wednesday that could also influence the USDM map.
+    Adding this feature has not yet been done but should before drawing in-depth
+    conclusions as currently only the most recent map is considered.
 
     Parameters
     ----------
@@ -83,6 +89,9 @@ def pair_to_usdm_date(usdm_dates:pd.DatetimeIndex, other_dates:pd.DatetimeIndex,
         Array of dates to pair to USDM dates.
     other_name: str
         Name of the other dates.
+    realign: boolean, (optional)
+        Whether to automatically clip dates to ensure proper pairing,
+        defaults as False.
 
     Returns
     -------

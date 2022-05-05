@@ -263,4 +263,130 @@ def threshold_filtered_pair(x:np.ndarray, y:np.ndarray, minx=None, maxx=None, mi
 
     return x[filter_idx], y[filter_idx]
 
+def cat_area_frac(da:xr.DataArray, cat_val:int):
+    """Fraction of non-nan area within a given drought category.
+
+    This function is applied at every index increment, collapsing
+    the data from spatio-temporal to just temporal.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Contains data categorized according to USDM drought categories.
+        Expecting `index` to be the temporal dimension.
+    cat_val : int
+        Category value to compute fraction over. For example, neutral or
+        wet corresponds to -1, D0 to 0, D1 to 1, D2 to 2, D3 to 3, and
+        D4 to 4.
+
+    Returns
+    -------
+    list
+        Fractions of area in drought category ordered in the same order
+        as the index dimension.
+
+    """
+
+    tot_cells = (np.isnan(da.sel(index=0).values) == False).sum()
+    cat_cells = [(da.sel(index=i).values == cat_val).sum() for i in da.index]
+    percents = cat_cells/tot_cells
+
+    return percents
+
+def compile_cat_area_fracs(da:xr.DataArray, var_prefix=None):
+    """Applies cat_area_frac to categories neutral to D4.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Data categorized to the USDM drought categories, where
+        -1 is netural or wet, 0 is D0, 1 is D1, 2 is D2, 3 is D3,
+        and 4 is D4. Expecting `index` to be the temporal dimension.
+    var_prefix : str, (optional)
+        Append a prefix to the variables in the xarray Dataset that
+        will be returned, should you aim to concat them into a larger
+        dataset.
+    
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing fraction of non-nan area in each USDM
+        drought category, using the `index` dimension from the
+        provided variable `da`.
+        
+    """
+
+    neutral_wet = cat_area_frac(da, -1)
+    d0 = cat_area_frac(da, 0)
+    d1 = cat_area_frac(da, 1)
+    d2 = cat_area_frac(da, 2)
+    d3 = cat_area_frac(da, 3)
+    d4 = cat_area_frac(da, 4)
+
+    index = da.index.values
+
+    ds = xr.Dataset(
+        coords=dict(
+            index=index
+        ),
+        data_vars=dict(
+            neutral_wet=(["index"], neutral_wet),
+            D0=(["index"], d0),
+            D1=(["index"], d1),
+            D2=(["index"], d2),
+            D3=(["index"], d3),
+            D4=(["index"], d4),
+        ),
+        attrs=dict(
+            {
+                'description':'Fraction of total non-nan area that is in that USDM drought category for the given index.'
+            }
+        )
+    )
+
+    if var_prefix:
+        ds = ds.rename({
+            "neutral_wet":f"{var_prefix}_neutral_wet",
+            "D0":f"{var_prefix}_D0",
+            "D1":f"{var_prefix}_D1",
+            "D2":f"{var_prefix}_D2",
+            "D3":f"{var_prefix}_D3",
+            "D4":f"{var_prefix}_D4"
+        })
+
+    return ds
+
+def apply_by_geometries(da:xr.DataArray, geometries:gpd.GeoSeries, func, **func_kwargs):
+    """Apply a function to the data based on the GeoSeries.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Data to apply function to.
+    geometries : gpd.GeoSeries
+        Contains geometries to clip the data to.
+    func : function
+        Function to apply to da.
+    **func_kwargs, (optional)
+        Keyword arguments for func.
+    
+    Returns
+    -------
+    list
+        Data after function has been applied to each geometric region, 
+        in the same order as geometries.
+        
+    """
+
+    applied = []
+    
+    for geo in tqdm(geometries, total=len(geometries)):
+        minx, miny, maxx, maxy = geo.bounds
+        # clipping to box first reduces total data working with for clip
+        clipping = (da.rio.clip_box(minx=minx, miny=miny, maxx=maxx, maxy=maxy)).rio.clip([geo])
+        post_op = func(clipping, **func_kwargs)
+        applied.append(post_op)
+
+    return applied
+
     
