@@ -389,4 +389,104 @@ def apply_by_geometries(da:xr.DataArray, geometries:gpd.GeoSeries, func, **func_
 
     return applied
 
+def cat_norm_time_freq(da:xr.DataArray, cat_val:int):
+    """Normalized time frequency within a given drought category.
+
+    This function is applied individually to each spatial cell,
+    collapsing the data from spatio-temporal to just spatial.
+    Normalization is relative to the total number of temporal
+    indices.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Contains data categorized according to USDM drought categories.
+        Expecting `index` to be the temporal dimension, and `lat` and 
+        `lon` as the latitude (y) and longitude (x) spatial dimensions.
+    cat_val : int
+        Category value to compute normalized time frequency over. For 
+        example, neutral or wet corresponds to -1, D0 to 0, D1 to 1, 
+        D2 to 2, D3 to 3, and D4 to 4.
+
+    Returns
+    -------
+    numpy masked array
+        Normalized time frequencies in drought category with the shape
+        (`lat`, `lon`), masked by the np.nan values of the first temporal
+        index in `da`.
+    """
+
+    cat_count = np.array([[np.sum(da.sel(lat=lat, lon=lon).values == cat_val) for lon in da['lon']] for lat in da['lat']])
+    cat_tf = cat_count/len(da['index'].values)
+    cat_tf_masked = np.ma.masked_where(np.isnan(da.isel(index=0).values), cat_tf)
+
+    return cat_tf_masked
+
+def compile_norm_time_freqs(da:xr.DataArray, var_prefix=None):
+    """Applies cat_norm_time_freq to categories neutral to D4.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Data categorized to the USDM drought categories, where
+        -1 is netural or wet, 0 is D0, 1 is D1, 2 is D2, 3 is D3,
+        and 4 is D4. Expecting `index` to be the temporal dimension,
+        and `lat` and `lon` as the latitude (y) and longitude (x)
+        spatial dimensions.
+    var_prefix : str, (optional)
+        Append a prefix to the variables in the xarray Dataset that
+        will be returned, should you aim to concat them into a larger
+        dataset.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing normalized time frequency for the drought
+        categories of each cell across `lat` and `lon` from the
+        provided variable `da`.
+
+    """
+
+    neutral_wet = cat_norm_time_freq(da, -1)
+    d0 = cat_norm_time_freq(da, 0)
+    d1 = cat_norm_time_freq(da, 1)
+    d2 = cat_norm_time_freq(da, 2)
+    d3 = cat_norm_time_freq(da, 3)
+    d4 = cat_norm_time_freq(da, 4)
+
+    lon = da.lon.values
+    lat = da.lat.values
+
+    ds = xr.Dataset(
+        coords=dict(
+            lat=lat,
+            lon=lon
+        ),
+        data_vars=dict(
+            neutral_wet=(["lat", "lon"], neutral_wet),
+            D0=(["lat", "lon"], d0),
+            D1=(["lat", "lon"], d1),
+            D2=(["lat", "lon"], d2),
+            D3=(["lat", "lon"], d3),
+            D4=(["lat", "lon"], d4),
+        ),
+        attrs=dict(
+            {
+                'description':'Temporal frequency each lat-lon cell is in each USDM drought category normalized by the total number of time indices.'
+            }
+        )
+    )
+
+    if var_prefix:
+        ds = ds.rename({
+            "neutral_wet":f"{var_prefix}_neutral_wet",
+            "D0":f"{var_prefix}_D0",
+            "D1":f"{var_prefix}_D1",
+            "D2":f"{var_prefix}_D2",
+            "D3":f"{var_prefix}_D3",
+            "D4":f"{var_prefix}_D4"
+        })
+
+    return ds
+
     
