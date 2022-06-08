@@ -213,6 +213,12 @@ Processes and organizes hunting and fishing license data.
 
 Checking on work done in ways that typically gets more in the weeds and away from analysis itself to verify product accuracy.
 
+### **`open_mfdataset_test`**
+
+06.07.2022 - produced by B. Nijssen
+
+Trying to solve data missing issue from `open_mfdataset` with USDM.
+
 ### **`spi_quantiles_qa.ipynb`**
 
 06.01.2022
