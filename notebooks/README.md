@@ -152,7 +152,7 @@ Explores rescaling USDM & SPI to match each other, creating the UDSM colorbar, h
 
 Compiling, sorting, and developing structure to data.
 
-### **`clip_cat_spei.ipynb`**
+### **`clip_cat_spei.ipynb`** <-------- **left off here**
 
 06.06.2022'
 
