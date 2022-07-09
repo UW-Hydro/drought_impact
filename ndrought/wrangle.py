@@ -489,4 +489,90 @@ def compile_norm_time_freqs(da:xr.DataArray, var_prefix=None):
 
     return ds
 
+def get_usdmcat_com(data:np.ndarray):
+    """Compute center of mass for USDM category data.
+
+    Parameters
+    ----------
+    data: np.ndarray
+        Contains values ranging from -1 to 4 according
+        to USDM category gridding, with empty cells
+        being set to np.nan
     
+    Returns
+    -------
+    x, y : float
+        Center of mass coordinates in x and y computed
+        by ndimage.measurements.center_of_mass
+    
+    """
+    
+    # shift everything to positive nonzero
+    data += 2
+    # replace nans with zero mass
+    data[np.isnan(data)] = 0
+
+    # compute center of mass
+    com_y, com_x = ndimage.measurements.center_of_mass(data)
+
+    return com_x, com_y
+
+def transform_index_to_coords(idx_data:np.ndarray, coord_ref:np.ndarray):
+    """Transforms coordinate indices to coordinates.
+
+    This function is useful especially if you have partial indices, like
+    those that might be computed from calculating center of mass. Note
+    that this is designed for 1D arrays, so you would make 2 separate
+    function calls to transform longitude data and latitude data.
+
+    Parameters
+    ----------
+    idx_data : np.ndarray
+        Index based data.
+    coord_ref : np.ndarray
+        Reference coordinate array that covers the full spread to project
+        the idx_data onto.
+
+    Returns
+    -------
+    np.ndarray    
+    """
+
+    return ((coord_ref[-1] - coord_ref[0])*idx_data/len(coord_ref))+coord_ref[0]
+
+def compute_usdmcat_com_coords(da:xr.DataArray):
+    """Computes center of mass based on UDSM categories as weights.
+
+    This function combines get_usdm_com and transform_index_to_coords
+    into one function for simplicity.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Contains data categorized from -1 to 4 according to gridded USDM
+        scheme. Expects `lat` and `lon` dimensions for longitude and latitude,
+        along with `index` dimension as the temporal component.
+
+    Returns
+    -------
+    x, y : np.ndarray
+        X and Y coordinates as longitude and latitude values, respectively, for
+        the center of mass at each corresponding time interval in `index`.
+    
+    """
+
+    com_x_list = []
+    com_y_list = []
+
+    for idx in da.index:
+        com_x, com_y = get_usdmcat_com(da.sel(index=idx).values)
+        com_x_list.append(com_x) 
+        com_y_list.append(com_y)
+
+
+    com_x_coords = transform_index_to_coords(np.array(com_x_list), da.lon.values)
+    com_y_coords = transform_index_to_coords(np.array(com_y_list), da.lat.values)
+
+    return com_x_coords, com_y_coords
+
+
