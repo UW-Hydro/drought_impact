@@ -786,7 +786,35 @@ def encode_drought_events(data:np.ndarray):
 
     return all_blobs_df
 
-def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=None, plot_legend=True):
+def check_event_id_trace(event_id:str, drought_id:str):
+    """Check if a drought_id contains a specific event.
+
+    Parameters
+    ----------
+    event_id : str
+        What might be considered the root of the drought_id, 
+        the event that you are looking to follow the
+        evolution of through merges and splits.
+    drought_id : str
+        drought_id to check from propagate_drought_id.
+
+    Returns
+    -------
+    boolean
+        If the drought_id contains the event_id.
+
+    """
+
+    event_found = False
+    sub_events = drought_id.split('.')
+    i = 0
+    while i < len(sub_events) and not event_found:
+        event_found = sub_events[i].split('-')[0] == event_id
+        i += 1
+
+    return event_found
+
+def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=None, plot_legend=True, cmap=plt.cm.get_cmap('hsv')):
     """Plots the evolution of droughts over time from blob detection.
 
     Parameters
@@ -812,7 +840,7 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
     if ax is None:
         __, ax = plt.subplots()
 
-    related_events_idx = [i for i, val in enumerate(df['drought_id']) if f'{event_id}' in val or f'.{event_id}' in val]
+    related_events_idx = [i for i, val in enumerate(df['drought_id']) if event_id == '' or check_event_id_trace(event_id, val)]
     thread_df = df.iloc[related_events_idx]
 
     # need to grab the last value since we aren't going to get a df to plot
@@ -821,6 +849,7 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
     template = np.zeros(len(times))
 
     unique_drought_id = sorted(set(thread_df['drought_id'].values))
+    #print(unique_drought_id)
 
     droughts = []
     for id in unique_drought_id:
@@ -833,7 +862,10 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
         
         droughts.append(event_array)
 
-    ax.stackplot(times, *droughts, labels=unique_drought_id)
+    color_array = np.linspace(0, 1, len(droughts))
+    colors = cmap(color_array)
+
+    ax.stackplot(times, *droughts, labels=unique_drought_id, colors=colors)
     ax.set_xlabel('Time')
     ax.set_ylabel(f'{plot_var} in drought event')
 
@@ -842,3 +874,4 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
 
     return ax
 
+    
