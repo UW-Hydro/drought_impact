@@ -576,3 +576,269 @@ def compute_usdmcat_com_coords(da:xr.DataArray):
     return com_x_coords, com_y_coords
 
 
+def identify_drought_blob(vals:np.ndarray):
+    """Using sci-kit image, identify drought event blobs.
+
+    Parameters
+    ----------
+    vals: np.ndarray
+        Spatial values for drought data categorized
+        according to the USDM scheme for a single
+        time step.
+
+    Returns
+    -------
+    pd.DataFrame
+        Drought blobs using connectivity 2 from
+        skimage.measure.label. Blobs are binary
+        definitions of drought, where the measure
+        exceeds D1. Each blob is provided with
+        it's area, bbox, convex_area, and coordinates
+        of all cells contained within the blob.    
+    """
+
+    # first we're going to make this binary
+    # by setting data in a drought to 1 and
+    # not in a drought to 0, including nan
+
+    vals[(vals < 1) | np.isnan(vals)] = 0
+    vals[vals > 0] = 1
+
+    # now we are going to convert to RGBL
+    (h, w) = vals.shape
+    t = (h, w, 3)
+    A = np.zeros(t, dtype=np.uint8)
+    for i in range(h):
+        for j in range(w):
+            # since we already made it binary, this
+            # will make 1 vals be white and 0 vals
+            # be black in our RGB array
+            color_val = 255*vals[i,j]
+            A[i, j] = [color_val, color_val, color_val]
+
+    # connectivity 2 will consider diagonals as connected
+    blobs = skimage.measure.label(rgb2gray(A) > 0, connectivity=2)
+
+    properties =['area','bbox','convex_area','coords']
+    df = pd.DataFrame(regionprops_table(blobs, properties=properties))
+
+    return df
+
+def connect_blobs_over_time(df_1:pd.DataFrame, df_2:pd.DataFrame):
+    """Identify blobs shared between time frames.
+
+    Parameters
+    ---------
+    df_1 : pd.DataFrame
+        Blob dataframe at first time index.
+    df_2 : pd.DataFrame
+        Blob dataframe at second time index.
+
+    Returns
+    -------
+    list
+        Indices to each dataframe denoting which
+        blobs are shared, where each tuple in the
+        list is connection. The first index of
+        each tuple corresponds to df_1, while the
+        second index correponds to df_2
+    """
+
+    blob_pairs = []
+
+    for idx_1, df_1_coords in enumerate(df_1.coords.values):
+        df_1_coords_set = set(tuple(coord) for coord in df_1_coords)
+        for idx_2, df_2_coords in enumerate(df_2.coords.values):
+            df_2_coords_set = set(tuple(coord) for coord in df_2_coords)
+            if len(df_1_coords_set.intersection(df_2_coords_set)) > 0:
+                blob_pairs.append((idx_1, idx_2))
+
+    return blob_pairs
+
+def propagate_drought_id(df_1, df_2, connections, new_blob_num=1):
+
+    if len(connections) > 0:
+
+        # need to keep track of splits among multiple
+        # blobs (since they are 1-to-many and we are
+        # iterating through linearly)
+        split_origins = dict()
+
+        for i in np.arange(len(df_2)):
+            drought_id = ""
+
+            # ALL CONNECTIONS
+            # first we need to figure out if we are connected
+            connects_origins = list()
+            for connect in connections:
+                # this means that our current index
+                # connects to a previous time's index
+                if connect[1] == i:
+                    # we already know it's going to index i
+                    # we need to figure out where it's coming from
+                    connects_origins.append(connect[0])
+
+            # SPLITS        
+            # now we need to check if this is part of a split
+            split_connections = dict()
+            for origin in connects_origins:
+                split_counter = 0
+                for connect in connections:
+                    # we want to count how many times the origin is
+                    # connected to something ... if it ends up being
+                    # more than once then it's a split
+                    if connect[0] == origin:
+                        split_counter += 1
+                # meaning we found a split
+                if split_counter > 1:
+                    split_connections[origin] = split_counter
+                    # if this is a new split we found, we
+                    # should make sure to save a note of it
+                    if origin not in split_origins.keys():
+                        split_origins[origin] = 1
+                
+            # so this would be if the split was found        
+            if len(split_connections) > 0:
+                for split_origin in split_connections.keys():
+                    split_origin_id = df_1['drought_id'].values[split_origin]
+                    current_split_num = split_origins[split_origin]
+
+                    drought_id = f'{split_origin_id}-{current_split_num}'
+                    
+                    # iterate for the next blob it splits into
+                    split_origins[split_origin] += 1
+
+            # MERGES
+            # we have a merge if more than 1 blob
+            # goes into this one
+            if len(connects_origins) > 1:
+                merged_blob_ids = df_1.iloc[connects_origins].sort_values('area', ascending=False)['drought_id'].values
+                # double check if we already had a split and began
+                # writing our code for this blob, if not we need to
+                # set it up
+                if len(drought_id) == 0:
+                    drought_id = merged_blob_ids[0]
+                for id in merged_blob_ids[1:]:
+                    drought_id = f'{drought_id}.{id}'
+                    
+            # NO SPLIT NO MERGE        
+            if len(connects_origins) == 1 and len(split_connections) == 0:
+                drought_id = df_1.iloc[connects_origins[0]]['drought_id']
+                
+
+            # CONNECTIONS EXIST, BUT NEW BLOB
+            if len(connects_origins) == 0:
+                drought_id = f'{new_blob_num}'
+                new_blob_num += 1    
+
+            df_2['drought_id'].iloc[i] = drought_id                   
+
+    else:
+        # there were no connections, all id's start from scratch
+        for i in np.arange(len(df_2)):
+            df_2['drought_id'].iloc[i] = f'{new_blob_num}'
+            new_blob_num += 1
+
+    return df_2, new_blob_num
+
+def encode_drought_events(data:np.ndarray):
+    """Detect and encode drought events.
+
+    Parameters
+    ----------
+    data: np.ndarray
+        Expecting first index to be temporal while second
+        and third are spatial.
+
+    Returns
+    -------
+    pd.DataFrame
+        A multi-indexed dataframe with time as the first level
+        and drought_id as the second level. 'area', 'convex_area',
+        and 'coords' are also outputted in this dataframe computed 
+        from sci-kit image. 
+    
+    """
+    blob_dfs = []
+
+    for i in tqdm(np.arange(data.shape[0]), desc='Identifying Blobs'):
+        blob_dfs.append(identify_drought_blob(data[i,:,:]))
+    
+
+    #return blob_dfs
+
+    new_blob_num = 1
+    init_df, new_blob_num = propagate_drought_id(df_2=blob_dfs[0])
+    init_df['time'] = 0
+    encoded_blob_dfs = [init_df]    
+    for i in tqdm(np.arange(len(blob_dfs)-1), desc='Encoding Blobs'):
+        df_1 = encoded_blob_dfs[i]
+        df_2 = blob_dfs[i+1]
+
+        blob_pairs = connect_blobs_over_time(df_1, df_2)
+        df_2_encoded, new_blob_num = propagate_drought_id(df_1, df_2, blob_pairs, new_blob_num)
+        df_2_encoded['time'] = i+1
+        encoded_blob_dfs.append(df_2_encoded)
+
+    all_blobs_df = pd.concat([df[['time', 'drought_id', 'area', 'convex_area', 'coords']] for df in encoded_blob_dfs], ignore_index=True)
+    all_blobs_df = all_blobs_df.set_index(['time', 'drought_id'])
+    all_blobs_df['drought_id'] = all_blobs_df.index.get_level_values(1)
+
+    return all_blobs_df
+
+def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=None, plot_legend=True):
+    """Plots the evolution of droughts over time from blob detection.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Expected to be the output of encode_drought_events
+    event_id : str (optional)
+        The initial drought_id of the drought wishing to follow.
+        Defaults as '' to plot everything.
+    plot_var : str (optional)
+        Variable from df to plot, defaults as 'area' to plot pixel
+        area computed from blob detection.
+    ax (optional)
+        matplotlib axes object to plot on. one will be created
+        if not given.
+    plot_legend : boolean
+        Whether to plot the legend (which can sometimes be quite long).
+        Defaults as True to plot the legend
+    """
+
+    assert(isinstance(event_id, str))
+
+    if ax is None:
+        __, ax = plt.subplots()
+
+    related_events_idx = [i for i, val in enumerate(df['drought_id']) if f'{event_id}' in val or f'.{event_id}' in val]
+    thread_df = df.iloc[related_events_idx]
+
+    # need to grab the last value since we aren't going to get a df to plot
+    # from times when there is no drought
+    times = np.arange(df.index.get_level_values(0)[-1]+1)
+    template = np.zeros(len(times))
+
+    unique_drought_id = sorted(set(thread_df['drought_id'].values))
+
+    droughts = []
+    for id in unique_drought_id:
+        event_df = thread_df[thread_df.drought_id == id]
+        event_array = template.copy()
+        event_times = event_df.index.get_level_values(0)
+
+        for time in event_times:
+            event_array[time] = event_df.loc[time][plot_var]
+        
+        droughts.append(event_array)
+
+    ax.stackplot(times, *droughts, labels=unique_drought_id)
+    ax.set_xlabel('Time')
+    ax.set_ylabel(f'{plot_var} in drought event')
+
+    if plot_legend:
+        ax.legend()
+
+    return ax
+
