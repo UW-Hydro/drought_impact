@@ -13,6 +13,13 @@ import numpy as np
 import rioxarray
 from shapely.geometry import mapping
 import geopandas as gpd
+import matplotlib as plt
+from tqdm.autonotebook import tqdm
+
+import skimage
+
+from skimage.color import rgb2gray
+from skimage.measure import regionprops_table
 
 
 def cunnane_empircal_cdf(data):
@@ -621,8 +628,10 @@ def identify_drought_blob(vals:np.ndarray):
 
     properties =['area','bbox','convex_area','coords']
     df = pd.DataFrame(regionprops_table(blobs, properties=properties))
+    df['drought_id'] = np.nan*np.zeros(len(df))
 
     return df
+
 
 def connect_blobs_over_time(df_1:pd.DataFrame, df_2:pd.DataFrame):
     """Identify blobs shared between time frames.
@@ -655,7 +664,7 @@ def connect_blobs_over_time(df_1:pd.DataFrame, df_2:pd.DataFrame):
 
     return blob_pairs
 
-def propagate_drought_id(df_1, df_2, connections, new_blob_num=1):
+def propagate_drought_id(df_1=None, df_2=None, connections=[], new_blob_num=1):
 
     if len(connections) > 0:
 
@@ -731,12 +740,12 @@ def propagate_drought_id(df_1, df_2, connections, new_blob_num=1):
                 drought_id = f'{new_blob_num}'
                 new_blob_num += 1    
 
-            df_2['drought_id'].iloc[i] = drought_id                   
+            df_2.loc[i, 'drought_id'] = drought_id                   
 
     else:
         # there were no connections, all id's start from scratch
         for i in np.arange(len(df_2)):
-            df_2['drought_id'].iloc[i] = f'{new_blob_num}'
+            df_2.loc[i, 'drought_id'] = f'{new_blob_num}'
             new_blob_num += 1
 
     return df_2, new_blob_num

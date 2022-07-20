@@ -133,3 +133,68 @@ def pair_to_usdm_date(usdm_dates:pd.DatetimeIndex, other_dates:pd.DatetimeIndex,
 
     return pair_dates
 
+def dm_to_usdmcat(da:xr.DataArray):
+    """Categorizes drought measure based on USDM categories.
+
+    Uses the mapping scheme presented by USDM (https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx)
+    Where Neutral is -1, D0 is 0, D1 is 1, D2, is 2, D3 is 3, and D4 is 4.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Contains SPI values.
+    
+    Returns
+    -------
+    xr.DataArray
+        DataArray formatted the same as da but using USDM categories.
+
+    """
+
+    # make sure we don't overwrite the original
+    da_copy = da.copy()
+    # can only do boolean indexing on the underlying array
+    da_vals = da.values
+    da_vals_nonnan = da_vals[np.isnan(da_vals) == False]
+    # calculate percentiles
+    (p30, p20, p10, p5, p2) = np.percentile(da_vals_nonnan.ravel(), [30, 20, 10, 5, 2])
+    # get a copy to make sure reassignment isn't compounding
+    da_origin = da_vals.copy()
+
+    # assign neutral
+    da_vals[da_origin > p30] = -1
+    # assign D0
+    da_vals[(da_origin <= p30)&(da_origin > p20)] = 0
+    # assign D1
+    da_vals[(da_origin <= p20)&(da_origin > p10)] = 1
+    # assign D2
+    da_vals[(da_origin <= p10)&(da_origin > p5)] = 2
+    # assign D3
+    da_vals[(da_origin <= p5)&(da_origin > p2)] = 3
+    # assign D4
+    da_vals[(da_origin <= p2)] = 4
+
+    # put them back into the dataarray
+    da_copy.loc[:,:] = da_vals
+
+    return da_copy
+
+def dm_to_usdmcat_multtime(ds:xr.Dataset):
+    """Categorizes drought measure based on USDM categories for multiple times.
+    
+    See dm_to_usdmcat for further documentation.
+    
+    Parameters
+    ----------
+    spi_ds : xr.Dataset
+        SPI at multiple time values as the coordinate 'day'.
+    
+    Returns
+    -------
+    xr.Dataset
+        Drought measure categorized by dm_to_usdmcat.
+    """
+    
+    return dm_to_usdmcat(xr.concat([ds.sel(day=day) for day in ds['day'].values], dim='day'))
+
+  

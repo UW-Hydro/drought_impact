@@ -14,6 +14,11 @@ Updated: 6.8.2022
 
 Examining data with a specific objective.
 
+### **`compare_drought_events`**
+7.14.2022
+
+Following the work developed in `explore/drought_event_tracking.ipynb`, this notebook summarizes the methodology and provides space for analysis.
+
 ### **`compare_indicators.ipynb`**
 
 01.12.2022
@@ -102,11 +107,21 @@ Instead of aggregating into area fractions, this notebook aims to do a pixel res
 
 Delving into data without any particular objective, or looking to develop a workflow but not perform analysis.
 
+### **`drought_center_of_mass.ipynb`**
+7.7.2022
+
+Perhaps a way to evaluate spatial changes is ot calculate a center of mass weighted by higher drought categories having a bigger drag on the center.
+
 ### **`drought_declarations.ipynb`**
 
 Date unknown.
 
 Beginning exploration of WA Drought declaration distribution and frequency.
+
+### **`drought_event_tracking.ipynb`**
+7.8.2022
+
+A useful piece of information would be how big different droughts get because each pixel is impacted by its neighbor. Through blob tracking, I might be able to detect different drought events and their areas over time as they come and go.
 
 ### **`explore_animation.ipynb`**
 
@@ -158,7 +173,7 @@ Compiling, sorting, and developing structure to data.
 
 Getting SPEI setup to compare to WA USDM.
 
-**Produces**: TBD
+**Produces**: `spei/WA/spei_{interval}.nc`
 
 ### **`clip_met_data.ipynb`**
 
