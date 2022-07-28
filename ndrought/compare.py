@@ -194,7 +194,11 @@ def dm_to_usdmcat_multtime(ds:xr.Dataset):
     xr.Dataset
         Drought measure categorized by dm_to_usdmcat.
     """
-    
-    return dm_to_usdmcat(xr.concat([ds.sel(day=day) for day in ds['day'].values], dim='day'))
+    if 'day' in ds.coords:
+        return dm_to_usdmcat(xr.concat([ds.sel(day=day) for day in ds['day'].values], dim='day'))
+    elif 'time' in ds.coords:
+        return dm_to_usdmcat(xr.concat([ds.sel(time=t) for t in ds['time'].values], dim='time'))
+    else:
+        raise Exception('Time dimension not day or time')
 
   

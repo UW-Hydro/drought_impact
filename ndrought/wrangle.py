@@ -728,7 +728,7 @@ def propagate_drought_id(df_1=None, df_2=None, connections=[], new_blob_num=1):
                 if len(drought_id) == 0:
                     drought_id = merged_blob_ids[0]
                 for id in merged_blob_ids[1:]:
-                    drought_id = f'{drought_id}.{id}'
+                    drought_id = f'{drought_id}.({id})'
                     
             # NO SPLIT NO MERGE        
             if len(connects_origins) == 1 and len(split_connections) == 0:
@@ -818,7 +818,12 @@ def check_event_id_trace(event_id:str, drought_id:str):
     sub_events = drought_id.split('.')
     i = 0
     while i < len(sub_events) and not event_found:
-        event_found = sub_events[i].split('-')[0] == event_id
+        check_sub_event = sub_events[i].split('-')[0]
+        if check_sub_event[0] == '(':
+            check_sub_event = check_sub_event[1:]
+        if check_sub_event[-1] == ')':
+            check_sub_event = check_sub_event[:-1]
+        event_found = check_sub_event == event_id
         i += 1
 
     return event_found
