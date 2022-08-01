@@ -14,10 +14,7 @@ Updated: 6.8.2022
 
 Examining data with a specific objective.
 
-### **`compare_drought_events`**
-7.14.2022
 
-Following the work developed in `explore/drought_event_tracking.ipynb`, this notebook summarizes the methodology and provides space for analysis.
 
 ### **`compare_indicators.ipynb`**
 
@@ -118,6 +115,11 @@ Date unknown.
 
 Beginning exploration of WA Drought declaration distribution and frequency.
 
+### **`drought_event_network.ipynb`**
+7.28.2022
+
+Okay. So following `explore/drought_tracking.ipynb` I did `quality_control/tset_drought_event_plot.ipynb` and found that while blob identifying and connecting over time works ... the id system is a nightmare and not very smooth to use, especially as I realized during testing that I needed one extra set of parenthesis around a split to make the id's unique. This makes sorting them a further pain and there isn't a great way to trace history despite the id being unique (writing something to then process sorting is really annoying). So, let's try making a nodal network to keep track of it instead in combination with networkx.
+
 ### **`drought_event_tracking.ipynb`**
 7.8.2022
 
@@ -167,7 +169,22 @@ Explores rescaling USDM & SPI to match each other, creating the UDSM colorbar, h
 
 Compiling, sorting, and developing structure to data.
 
-### **`clip_cat_spei.ipynb`** <-------- **left off here**
+### **`clip_cat_dms.ipynb`**
+7.20.2022
+
+Following the work of `organize_data/clip_cat_spei.ipynb`, this notebook looks to clip and categorize the remaining drought measures since the workflow is fairly identical. I want to only use the ones that are weekly at sparsest. These are:
+- grace
+- palmer z
+- pdsi
+
+**Produces**: clipped & categorized datasets as described
+
+### **`clip_cat_eddi.ipynb`**
+7.20.2022
+
+Getting EDDI setup to compare to WA USDM, following the work of `organize_data/clip_cat_spei.ipynb` (literally CTRL+F Replace All)
+
+### **`clip_cat_spei.ipynb`** 
 
 06.06.2022'
 
@@ -239,6 +256,11 @@ Trying to solve data missing issue from `open_mfdataset` with USDM.
 06.01.2022
 
 In `analysis/usdm_spi_investigate_temporal.ipynb` found that D4 appears very overrepresented in the stacked timeseries for WA caf, so here I'm looking into what's up with that.
+
+### **`test_drought_event_plot`**
+7.14.2022
+
+Following the work developed in `explore/drought_event_tracking.ipynb`, this notebook summarizes the methodology and provides space for analysis.
 
 ### **`usdm_spi_qa_sumzero_caf.ipynb`**
 
