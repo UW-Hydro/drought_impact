@@ -180,9 +180,7 @@ Following the work of `organize_data/clip_cat_spei.ipynb`, this notebook looks t
 **Produces**: clipped & categorized datasets as described
 
 ### **`clip_cat_eddi.ipynb`**
-7.20.2022
 
-Getting EDDI setup to compare to WA USDM, following the work of `organize_data/clip_cat_spei.ipynb` (literally CTRL+F Replace All)
 
 ### **`clip_cat_spei.ipynb`** 
 
