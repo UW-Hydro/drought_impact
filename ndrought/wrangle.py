@@ -582,8 +582,7 @@ def compute_usdmcat_com_coords(da:xr.DataArray):
 
     return com_x_coords, com_y_coords
 
-
-def identify_drought_blob(vals:np.ndarray):
+def identify_drought_blob(vals:np.ndarray, threshold=1):
     """Using sci-kit image, identify drought event blobs.
 
     Parameters
@@ -608,7 +607,7 @@ def identify_drought_blob(vals:np.ndarray):
     # by setting data in a drought to 1 and
     # not in a drought to 0, including nan
 
-    vals[(vals < 1) | np.isnan(vals)] = 0
+    vals[(vals < threshold) | np.isnan(vals)] = 0
     vals[vals > 0] = 1
 
     # now we are going to convert to RGBL

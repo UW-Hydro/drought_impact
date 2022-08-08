@@ -1,8 +1,12 @@
+from multiprocessing import Event
 import networkx as nx
 import numpy as np
 import ndrought.wrangle as wrangle
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
+import pickle
+from datetime import datetime
+
 
 class EventNode():
 
@@ -48,6 +52,15 @@ class EventNode():
     def __repr__(self):
         return f'time: {self.time}, id: {self.id}'
 
+    def __eq__(self, other):
+        if isinstance(other, EventNode):
+            return(
+                (self.id == other.id) and
+                (self.area == other.area) and
+                (np.array_equal(self.coords, other.coords)) and
+                (self.group_id == other.group_id)
+            )
+
     def append_future(self, other):
         """Adds a node to future.
 
@@ -57,6 +70,7 @@ class EventNode():
         
         """
         self.future.append(other)
+        
 
     def check_connects(self, other, auto_connect=True):
         """Checks if coords are shared between two EventNode's.
@@ -119,7 +133,7 @@ class EventNode():
         
         return futures
 
-def create_EventNodes(vals:np.ndarray, time=0, id=0):
+def create_EventNodes(vals:np.ndarray, time=0, id=0, threshold=1):
     """Creates an EventNode if drought blob exists.
 
     While the EventNode and DroughtNetwork class are
@@ -147,7 +161,7 @@ def create_EventNodes(vals:np.ndarray, time=0, id=0):
         found, as well as what the next available id is.
 
     """
-    df = wrangle.identify_drought_blob(vals)
+    df = wrangle.identify_drought_blob(vals, threshold)
     nodes = []
     for i in np.arange(len(df)):
         node = EventNode(
@@ -166,7 +180,7 @@ def create_EventNodes(vals:np.ndarray, time=0, id=0):
 
 class DroughtNetwork:
 
-    def __init__(self, data):
+    def __init__(self, data, threshold=1, name='drought_network'):
         """
         
         Parameters
@@ -179,12 +193,16 @@ class DroughtNetwork:
         self.data = data
         self.origins: List[EventNode] = list()
         self.nodes: List[EventNode] = list()
+        self.threshold = threshold
+        self.spawn_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        self.notes = "Put notes in here"
+        self.name = name
 
         # go through and setup network
         last_nodes = []
         id = 0
         for i in tqdm(np.arange(data.shape[0])):
-            nodes_i, id = create_EventNodes(data[i,:,:], time=i, id=id)
+            nodes_i, id = create_EventNodes(data[i,:,:], time=i, id=id, threshold=threshold)
             # see if we currently found some droughts
             if len(nodes_i) > 0:
                 # and if last time step there were droughts
@@ -235,6 +253,21 @@ class DroughtNetwork:
                 j_id = future.id
                 self.adj_mat[i_id, j_id] = 1
         
+    def __eq__(self, other):
+        if isinstance(other, DroughtNetwork):
+            return(
+                (self.threshold == other.threshold) and
+                (self.origins == other.origins) and
+                (self.nodes == other.nodes)
+            )
+
+    def __str__(self):
+        return f"{self.name}: DroughtNetwork with D{self.threshold} threshold, spawned {self.spawn_time}"
+
+    def __iter__(self):
+        for node in self.nodes:
+            yield node
+    
     def find_node_by_id(self, id)  :
         for node in self.nodes:
             if node.id == id:
@@ -472,4 +505,28 @@ class DroughtNetwork:
             ax.legend()
 
         return ax
-    
+
+    def relative_area_color_map(self, cmap=plt.cm.get_cmap('hsv')):
+
+        areas = [node.area for node in self.nodes]
+        max_area = np.max(areas)
+
+        color_map = []
+
+        for area in areas:
+            area_percent = area/max_area
+            color_map.append(cmap(area_percent)[:-1])
+        
+        return color_map
+
+    def pickle(self, path):
+
+        f = open(path, 'wb')
+        pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+
+    def unpickle(path):
+
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+
