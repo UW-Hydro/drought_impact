@@ -102,7 +102,7 @@ class EventNode():
         
         return connection_found
 
-    def get_future_thread(self, futures=[]):
+    def get_future_thread(self, thread=None):
         """Gathers nodes that connect via future.
 
         Recursively crawls through future to collect
@@ -112,8 +112,9 @@ class EventNode():
 
         Parameters
         ----------
-        self: EventNode
-        futures, (optional): list
+        self: DroughtNetwork
+        node: EventNode
+        thread, (optional): list
             Contains futures found thus far. Passing
             this recursively eliminated redundancy.
 
@@ -124,14 +125,18 @@ class EventNode():
         
         """
 
-        if not self in futures:
-            futures.append(self)
-       
-        if len(self.future) > 0:
-            for node in self.future:
-                futures = node.get_future_thread(futures)
+        if thread is None:
+            thread = []
+
+        if not self in thread:
+            thread.append(self)
         
-        return futures
+        if len(self.future) > 0:
+            for future_node in self.future:
+                future_node.get_future_thread(thread)
+
+        return thread
+
 
 def create_EventNodes(vals:np.ndarray, time=0, id=0, threshold=1):
     """Creates an EventNode if drought blob exists.
@@ -194,7 +199,9 @@ class DroughtNetwork:
         self.origins: List[EventNode] = list()
         self.nodes: List[EventNode] = list()
         self.threshold = threshold
+        # record when this was made to improve record
         self.spawn_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        # some notes for legibility
         self.notes = "Put notes in here"
         self.name = name
 
@@ -268,17 +275,26 @@ class DroughtNetwork:
         for node in self.nodes:
             yield node
     
-    def find_node_by_id(self, id)  :
-        for node in self.nodes:
-            if node.id == id:
-                return node
-        
-        raise Exception(f'id: {id} not in network')
+    def find_node_by_id(self, id):
+        try:
+            found_node = self.nodes[id]
+            # in case the nodes are no longer in order,
+            # do a linear crawl
+            if found_node.id != id:
+                for node in self.nodes:
+                    if id == node.id:
+                        found_node = node 
+
+            return found_node
+        except:
+            raise Exception(f'id: {id} not in network')
+
+    
             
     def get_chronological_future_thread(self, id):
         """Collects future thread in chronological order.
 
-        While this uses EventNode.get_future_thread, it
+        While this uses get_future_thread, it
         also sorts the nodes into chronological order
         to make plotting and the like easier that the
         recursive function does not originally do.
@@ -290,7 +306,7 @@ class DroughtNetwork:
 
         Returns
         -------
-        List[EventNode
+        List[EventNode]
         
         """
         node = self.find_node_by_id(id)
@@ -356,7 +372,7 @@ class DroughtNetwork:
         
         return time_sliced
 
-    def get_nx_network(self, id=None):
+    def get_nx_network(self, id=None, start_time=None, end_time=None, adj_mat=None):
         """Gets topography and positions for networkx.
 
         Used for plotting in networkx.draw_networkx
@@ -375,12 +391,17 @@ class DroughtNetwork:
             nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
         
         """
-        topog = nx.from_numpy_array(self.adj_mat)
+        if adj_mat is None:
+            adj_mat = self.adj_mat
+        topog = nx.from_numpy_array(adj_mat)
 
-        if id is None:
-            plot_nodes = self.nodes
-        else:
+        if start_time or end_time:
+            plot_nodes = self.time_slice(start_time, end_time, id)
+            
+        elif isinstance(id, int):
             plot_nodes = self.get_chronological_future_thread(id)
+        else:
+            plot_nodes = self.nodes
 
         plot_ids = [node.id for node in plot_nodes]
         
@@ -420,7 +441,7 @@ class DroughtNetwork:
 
         if start_time or end_time:
             nodes = self.time_slice(start_time, end_time, id)
-        elif id:
+        elif isinstance(id, int):
             nodes = self.get_chronological_future_thread(id)
         else:
             nodes = self.nodes
@@ -466,7 +487,7 @@ class DroughtNetwork:
         
         if start_time or end_time:
             nodes = self.time_slice(start_time, end_time, id)
-        elif id:
+        elif isinstance(id, int):
             nodes = self.get_chronological_future_thread(id)
         else:
             nodes = self.nodes
@@ -505,10 +526,64 @@ class DroughtNetwork:
             ax.legend()
 
         return ax
+    
+    def to_array(self, id=None, start_time=None, end_time=None):
+        """
+        """
 
-    def relative_area_color_map(self, cmap=plt.cm.get_cmap('hsv')):
+        if start_time or end_time:
+            nodes = self.time_slice(start_time, end_time, id)
+        elif isinstance(id, int):
+            nodes = self.get_chronological_future_thread(id)
+        else:
+            nodes = self.nodes
+        
+        found_start_time = nodes[0].time
+        found_end_time = nodes[-1].time
 
-        areas = [node.area for node in self.nodes]
+        array_out = np.zeros(((found_end_time-found_start_time)+1, self.data.shape[1], self.data.shape[2]))
+
+        for node in nodes:
+            t = node.time - found_start_time
+            for [i, j] in node.coords:
+                array_out[t, i, j] += 1
+        
+        return array_out
+                
+    def temporal_color_map(self, start_time=None, end_time=None, id=None, cmap=plt.cm.get_cmap('hsv')):
+        
+        if start_time or end_time:
+            nodes = self.time_slice(start_time, end_time, id)
+        elif isinstance(id, int):
+            nodes = self.get_chronological_future_thread(id)
+        else:
+            nodes = self.nodes
+
+        times = [node.time for node in nodes]
+
+        found_start_time = times[0]
+        found_end_time = times[-1]
+        time_range = found_end_time = found_end_time
+
+        color_map = []
+
+        for time in times:
+            time_percent = (time-found_start_time)/time_range
+            color_map.append(time_percent)
+
+        return color_map
+        
+
+    def relative_area_color_map(self, start_time=None, end_time=None, id=None, cmap=plt.cm.get_cmap('hsv')):
+
+        if start_time or end_time:
+            nodes = self.time_slice(start_time, end_time, id)
+        elif isinstance(id, int):
+            nodes = self.get_chronological_future_thread(id)
+        else:
+            nodes = self.nodes
+
+        areas = [node.area for node in nodes]
         max_area = np.max(areas)
 
         color_map = []
@@ -529,4 +604,110 @@ class DroughtNetwork:
 
         with open(path, 'rb') as f:
             return pickle.load(f)
+
+    def rebuild_adj_mat(self):
+        adj_mat = np.zeros(self.adj_mat.shape)
+        for node in self.nodes:
+            i_id = node.id
+            for future in node.future:
+                j_id = future.id
+                adj_mat[i_id, j_id] = 1
+        self.adj_mat = adj_mat
+
+    def network_filter_by_area(self, area_filter):
+        
+        filtered_nodes = []
+
+        for node in self.nodes:
+            if node.area <= area_filter:
+                filtered_nodes.append(node)
+
+        for node in tqdm(filtered_nodes):
+            try:
+                self.nodes.remove(node)
+                self.origins.remove(node)
+            except:
+                pass
+
+            for past_node in node.past:
+                past_node.future.remove(node)
+            for future_node in node.future:
+                future_node.past.remove(node)
+                if len(future_node.past) == 0 and not future_node in self.origins:
+                    self.origins.append(future_node)
+
+        self.rebuild_adj_mat()
+        
+        return filtered_nodes
+
+    def insert_nodes_in_network(self, new_nodes):
+        # first let's check that there aren't id duplicates
+        new_ids = [new_node.id for new_node in new_nodes]
+        current_ids = [node.id for node in self.nodes]
+
+        repeat_ids = []
+        for id in new_ids:
+            if id in current_ids:
+                repeat_ids.append(id)
+        
+        if len(repeat_ids) != 0:
+            raise Exception(f"The following id's are already in the network:{repeat_ids}")
+        
+        for node in tqdm(new_nodes):
+            
+            if len(node.past) > 0:
+                for past_node in node.past:
+                    past_node.future.append(node)
+                    
+            else:
+                self.origins.append(node)
+        
+            for future_node in node.future:
+                future_node.past.append(node)
+                if future_node in self.origins:
+                    self.origins.remove(future_node)
+            
+            # lastly need to put the node back in order
+            # since some of the code relies on them being ordered
+            i = 0
+            node_placed = False
+            while i < len(self.nodes) and not node_placed:
+                if node.id > self.nodes[i].id:
+                    i += 1
+                else:
+                    self.nodes.insert(i, node)
+                    node_placed = True
+            # now we could get through the whole list
+            # and not end up placing the node cause it should
+            # go at the end, so let's catch that
+            if not node_placed:
+                self.nodes.append(node)
+
+
+        self.rebuild_adj_mat()
+
+    def filter_graph_by_area(self, area_filter, id=None, start_time=None, end_time=None):
+
+        filtered_adj_mat = self.adj_mat.copy()
+        filtered_nodes = []
+        for node in tqdm(self.nodes):
+            if node.area <= area_filter:
+                filtered_nodes.append(node)
+                node_id = node.id
+                for future in node.future:
+                    filtered_adj_mat[node_id, future.id] = 0
+                for past in node.past:
+                    filtered_adj_mat[past.id, node_id] = 0
+
+        topog, __ = self.get_nx_network(id, start_time, end_time, filtered_adj_mat)
+        
+        for node in tqdm(filtered_nodes):
+            try:
+                topog.remove_node(node.id)
+            except:
+                pass
+        
+        pos = nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
+
+        return topog, pos
 

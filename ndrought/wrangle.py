@@ -294,7 +294,7 @@ def cat_area_frac(da:xr.DataArray, cat_val:int):
 
     """
 
-    tot_cells = (np.isnan(da.sel(index=0).values) == False).sum()
+    tot_cells = (np.isnan(da.isel(index=0).values) == False).sum()
     cat_cells = [(da.sel(index=i).values == cat_val).sum() for i in da.index]
     percents = cat_cells/tot_cells
 
