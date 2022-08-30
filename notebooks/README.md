@@ -14,7 +14,21 @@ Updated: 6.8.2022
 
 Examining data with a specific objective.
 
+### **`all_dm_compare_paired.ipynb`**
+8.8.2022
 
+This notebook begins to get into developing the comparison matrix between:
+- USDM
+- SPI
+- SPEI
+- EDDI
+- PDSI
+- Palmer Z Index
+- GRACE soil moisture data
+
+By "USDM Date Paired," I mean that while this data will be all categorized into USDM categories for similar measures, their time steps have been synced to USDM, but spatial scales have not been altered.
+
+**Produces**: `*_WA_caf.nc`, `*_drought_counts.pickle`, `*_net.pickle`, `*_WA_nx.pickle`
 
 ### **`compare_indicators.ipynb`**
 
@@ -107,7 +121,7 @@ Delving into data without any particular objective, or looking to develop a work
 ### **`drought_center_of_mass.ipynb`**
 7.7.2022
 
-Perhaps a way to evaluate spatial changes is ot calculate a center of mass weighted by higher drought categories having a bigger drag on the center.
+Perhaps a way to evaluate spatial changes is to calculate a center of mass weighted by higher drought categories having a bigger drag on the center.
 
 ### **`drought_declarations.ipynb`**
 
@@ -124,6 +138,30 @@ Okay. So following `explore/drought_tracking.ipynb` I did `quality_control/tset_
 7.8.2022
 
 A useful piece of information would be how big different droughts get because each pixel is impacted by its neighbor. Through blob tracking, I might be able to detect different drought events and their areas over time as they come and go.
+
+### **`drought_gradient.ipynb`**
+???
+In progress
+
+### **`drought_network_filter_and_mapping.ipynb`
+8.16.2022
+
+This notebook delves into the `DroughtNetwork` class developed in `explore/drought_event_network` and `explore/network_refinement`. Here I look into filtering by area to reduce noise (and disconnecting appropriate events where needed due to filter), adding a few more plot coloring, and converting the DroughtNetwork back out into an image.
+
+### **`drought_network_graph_manipulation.ipynb`**
+8.29.2022
+
+Upon wanting to improve filtering and other graph manipulation operations, I'm seeing the adjacency matrix as perhaps not the best method to do this. Here I will explore with adjacency lists instead and being able to include/exclude nodes with (hopefully) greater easy and coding simplicity.
+
+### **`drought_network_refinement.ipynb`**
+8.4.2022
+
+This picks up where `explore/drought_event_network.ipynb` left off, presenting a cleaner demonstration of the test case and cleaning up plotting functionality.
+
+### **`drought_network_stats.ipynb`**
+8.29.2022
+
+This notebook delves into comparing drought networks with a bit of a delve into graph theory.
 
 ### **`explore_animation.ipynb`**
 
@@ -243,6 +281,11 @@ Processes and organizes hunting and fishing license data.
 
 Checking on work done in ways that typically gets more in the weeds and away from analysis itself to verify product accuracy.
 
+### **`grace_data_check.ipynb`**
+Week of 8.22.2022
+
+Some of the GRACE data looks suspicious, let's dive into it and check.
+
 ### **`open_mfdataset_test`**
 
 06.07.2022 - produced by B. Nijssen
@@ -289,6 +332,11 @@ Collect gridded USDM data, converting from geotifs to netcdfs.
 Getting data from OPeNDAP on the THREDDS server at NKN. Note that some of the metrics may actually be produced from the bash script `/pool0/home/steinadi/data/drought/drought_impact/scripts/download_droughtvar_opendap.sh` instead.
 
 **Produces**: `vegdri.nc`, `mcdi.nc`, `leri.nc`, `grace.nc`, `fdsi.nc`, `esi_4wk.nc`, `esi_12wk.nc`, `pdsi.nc`, `spi*.nc` 
+
+### **`query_format_GRACE.ipynb`**
+8.29.2022
+
+Original data gathered from THREDDS was already categorized, so here I am getting the original matlab file from Katherine and getting it to work for me.
 
 ### **`query_huc_boundaries.ipynb`**
 
