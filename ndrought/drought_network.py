@@ -1,12 +1,13 @@
 from multiprocessing import Event
 import networkx as nx
 import numpy as np
+import matplotlib as mpl
 import ndrought.wrangle as wrangle
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
 import pickle
 from datetime import datetime
-
+import os
 
 class EventNode():
 
@@ -195,7 +196,8 @@ class DroughtNetwork:
             while the first and second dimension are
             spatial.
         """
-        self.data = data
+        self.data = data.copy()
+        data = self.data
         self.origins: List[EventNode] = list()
         self.nodes: List[EventNode] = list()
         self.threshold = threshold
@@ -253,12 +255,14 @@ class DroughtNetwork:
         # lastly, let's setup and adjacency matrix
         # the id will have been the last id plus 1,
         # which is great to set array dimensions
-        self.adj_mat = np.zeros((id, id))
+        adj_dict = dict()
         for node in self.nodes:
-            i_id = node.id
+            id = node.id
+            if id not in adj_dict.keys():
+                adj_dict[id] = []
             for future in node.future:
-                j_id = future.id
-                self.adj_mat[i_id, j_id] = 1
+                adj_dict[id].append(future.id)
+        self.adj_dict = adj_dict
         
     def __eq__(self, other):
         if isinstance(other, DroughtNetwork):
@@ -372,7 +376,7 @@ class DroughtNetwork:
         
         return time_sliced
 
-    def get_nx_network(self, id=None, start_time=None, end_time=None, adj_mat=None):
+    def get_nx_network(self, id=None, start_time=None, end_time=None, adj_dict=None):
         """Gets topography and positions for networkx.
 
         Used for plotting in networkx.draw_networkx
@@ -383,42 +387,6 @@ class DroughtNetwork:
             If you would like to select out an id thread at the
             same time, this can be given to use 
             get_chronological_future_thread to time slice through.
-
-        Returns
-        -------
-        topog, pos
-            Positions generated from the following function:
-            nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
-        
-        """
-        if adj_mat is None:
-            adj_mat = self.adj_mat
-        topog = nx.from_numpy_array(adj_mat)
-
-        if start_time or end_time:
-            plot_nodes = self.time_slice(start_time, end_time, id)
-            
-        elif isinstance(id, int):
-            plot_nodes = self.get_chronological_future_thread(id)
-        else:
-            plot_nodes = self.nodes
-
-        plot_ids = [node.id for node in plot_nodes]
-        
-        if plot_nodes != self.nodes:
-            for node in self.nodes:
-                if node.id not in plot_ids:
-                    topog.remove_node(node.id)
-        
-        pos = nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
-
-        return topog, pos
-
-    def thread_timeseries(self, id=None, start_time=None, end_time=None):
-        """Get time series from thread.
-
-        Parameters
-        ----------
         start_time, (optional): int
             What time to start the slice at, inclusive. If None
             is given, then the time of the first node in the
@@ -427,10 +395,57 @@ class DroughtNetwork:
             What time to end the slice at, inclusive. If None is
             given, then the time of the last node in the 
             DroughtNetwork is used.
+        adj_dict, (optional): dict
+            Use an alternative adjacency dictionary to the
+            whole network. Defaults to using whole network if None
+            is given. This overrules selecting by id, start_time, or
+            end_time.
+
+        Returns
+        -------
+        topog, pos
+            Positions generated from the following function:
+            nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
+        
+        """
+        if adj_dict is None:
+            if start_time or end_time:
+                plot_nodes = self.time_slice(start_time, end_time, id)
+                
+            elif isinstance(id, int):
+                plot_nodes = self.get_chronological_future_thread(id)
+            else:
+                plot_nodes = self.nodes
+
+            plot_ids = [node.id for node in plot_nodes]
+            adj_dict = self.filter_adj_dict_by_id(plot_ids)
+
+        
+        topog = nx.Graph(adj_dict)      
+        pos = self.get_nx_pos(topog)
+
+        return topog, pos
+
+    def get_nx_pos(self, topog):
+        return nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
+
+    def thread_timeseries(self, id=None, start_time=None, end_time=None):
+        """Get time series from thread.
+
+        Parameters
+        ----------
         id, (optional): int
             If you would like to select out an id thread at the
             same time, this can be given to use 
             get_chronological_future_thread to time slice through.
+        start_time, (optional): int
+            What time to start the slice at, inclusive. If None
+            is given, then the time of the first node in the
+            DroughtNetwork is used.
+        end_time, (optional): int
+            What time to end the slice at, inclusive. If None is
+            given, then the time of the last node in the 
+            DroughtNetwork is used.
 
         Returns
         -------
@@ -527,8 +542,35 @@ class DroughtNetwork:
 
         return ax
     
-    def to_array(self, id=None, start_time=None, end_time=None):
-        """
+    def to_array(self, id=None, start_time=None, end_time=None, adj_dict=None):
+        """Converts the network into a 3-D array.
+
+        Parameters
+        ----------
+        id, (optional): int
+            If you would like to select out an id thread at the
+            same time, this can be given to use 
+            get_chronological_future_thread to time slice through.
+        start_time, (optional): int
+            What time to start the slice at, inclusive. If None
+            is given, then the time of the first node in the
+            DroughtNetwork is used.
+        end_time, (optional): int
+            What time to end the slice at, inclusive. If None is
+            given, then the time of the last node in the 
+            DroughtNetwork is used.
+        adj_dict, (optional): dict
+            Use an alternative adjacency dictionary to the
+            whole network. Defaults to using whole network if None
+            is given.
+
+        Returns
+        -------
+        np.array
+            First dimension is time, second and third are lat/lon. The
+            array is only binary values based no the threshold originally
+            given to the network.
+
         """
 
         if start_time or end_time:
@@ -538,8 +580,17 @@ class DroughtNetwork:
         else:
             nodes = self.nodes
         
-        found_start_time = nodes[0].time
-        found_end_time = nodes[-1].time
+        if adj_dict:
+            temp = []
+            for node in nodes:
+                if node.id in adj_dict.keys():
+                    temp.append(node)
+            nodes = temp
+
+        times = [node.time for node in nodes]
+
+        found_start_time = np.array(times).min()
+        found_end_time = np.array(times).max()
 
         array_out = np.zeros(((found_end_time-found_start_time)+1, self.data.shape[1], self.data.shape[2]))
 
@@ -550,7 +601,33 @@ class DroughtNetwork:
         
         return array_out
                 
-    def temporal_color_map(self, start_time=None, end_time=None, id=None, cmap=plt.cm.get_cmap('hsv')):
+    def temporal_color_map(self, start_time=None, end_time=None, id=None, adj_dict=None, 
+    cmap=plt.cm.get_cmap('hsv')):
+        """Creates a node_color color map by temporal value.
+
+        Parameters
+        ----------
+        id, (optional): int
+            If you would like to select out an id thread at the
+            same time, this can be given to use 
+            get_chronological_future_thread to time slice through.
+        start_time, (optional): int
+            What time to start the slice at, inclusive. If None
+            is given, then the time of the first node in the
+            DroughtNetwork is used.
+        end_time, (optional): int
+            What time to end the slice at, inclusive. If None is
+            given, then the time of the last node in the 
+            DroughtNetwork is used.
+        adj_dict, (optional): dict
+            Use an alternative adjacency dictionary to the
+            whole network. Defaults to using whole network if None
+            is given.
+
+        Returns
+        -------
+        list
+        """
         
         if start_time or end_time:
             nodes = self.time_slice(start_time, end_time, id)
@@ -559,11 +636,19 @@ class DroughtNetwork:
         else:
             nodes = self.nodes
 
+        if adj_dict:
+            temp = []
+            for node in nodes:
+                if node.id in adj_dict.keys():
+                    temp.append(node)
+            nodes = temp
+
         times = [node.time for node in nodes]
 
-        found_start_time = times[0]
-        found_end_time = times[-1]
-        time_range = found_end_time = found_end_time
+        found_start_time = np.array(times).min()
+        found_end_time = np.array(times).max()
+        time_range = found_end_time - found_start_time
+        #print(times)
 
         color_map = []
 
@@ -574,7 +659,33 @@ class DroughtNetwork:
         return color_map
         
 
-    def relative_area_color_map(self, start_time=None, end_time=None, id=None, cmap=plt.cm.get_cmap('hsv')):
+    def relative_area_color_map(self, start_time=None, end_time=None, id=None, adj_dict=None, 
+    cmap=plt.cm.get_cmap('hsv')):
+        """Creates a node_color color map by area value.
+
+        Parameters
+        ----------
+        id, (optional): int
+            If you would like to select out an id thread at the
+            same time, this can be given to use 
+            get_chronological_future_thread to time slice through.
+        start_time, (optional): int
+            What time to start the slice at, inclusive. If None
+            is given, then the time of the first node in the
+            DroughtNetwork is used.
+        end_time, (optional): int
+            What time to end the slice at, inclusive. If None is
+            given, then the time of the last node in the 
+            DroughtNetwork is used.
+        adj_dict, (optional): dict
+            Use an alternative adjacency dictionary to the
+            whole network. Defaults to using whole network if None
+            is given.
+
+        Returns
+        -------
+        list
+        """
 
         if start_time or end_time:
             nodes = self.time_slice(start_time, end_time, id)
@@ -582,6 +693,13 @@ class DroughtNetwork:
             nodes = self.get_chronological_future_thread(id)
         else:
             nodes = self.nodes
+
+        if adj_dict:
+            temp = []
+            for node in nodes:
+                if node.id in adj_dict.keys():
+                    temp.append(node)
+            nodes = temp
 
         areas = [node.area for node in nodes]
         max_area = np.max(areas)
@@ -595,119 +713,69 @@ class DroughtNetwork:
         return color_map
 
     def pickle(self, path):
-
         f = open(path, 'wb')
         pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
     def unpickle(path):
-
         with open(path, 'rb') as f:
             return pickle.load(f)
 
-    def rebuild_adj_mat(self):
-        adj_mat = np.zeros(self.adj_mat.shape)
-        for node in self.nodes:
-            i_id = node.id
-            for future in node.future:
-                j_id = future.id
-                adj_mat[i_id, j_id] = 1
-        self.adj_mat = adj_mat
+    def filter_adj_dict_by_area(self, area_filter):
+        """
+        """
 
-    def network_filter_by_area(self, area_filter):
-        
-        filtered_nodes = []
+        adj_dict_filtered = dict()
 
         for node in self.nodes:
-            if node.area <= area_filter:
-                filtered_nodes.append(node)
-
-        for node in tqdm(filtered_nodes):
-            try:
-                self.nodes.remove(node)
-                self.origins.remove(node)
-            except:
-                pass
-
-            for past_node in node.past:
-                past_node.future.remove(node)
-            for future_node in node.future:
-                future_node.past.remove(node)
-                if len(future_node.past) == 0 and not future_node in self.origins:
-                    self.origins.append(future_node)
-
-        self.rebuild_adj_mat()
-        
-        return filtered_nodes
-
-    def insert_nodes_in_network(self, new_nodes):
-        # first let's check that there aren't id duplicates
-        new_ids = [new_node.id for new_node in new_nodes]
-        current_ids = [node.id for node in self.nodes]
-
-        repeat_ids = []
-        for id in new_ids:
-            if id in current_ids:
-                repeat_ids.append(id)
-        
-        if len(repeat_ids) != 0:
-            raise Exception(f"The following id's are already in the network:{repeat_ids}")
-        
-        for node in tqdm(new_nodes):
-            
-            if len(node.past) > 0:
-                for past_node in node.past:
-                    past_node.future.append(node)
-                    
-            else:
-                self.origins.append(node)
-        
-            for future_node in node.future:
-                future_node.past.append(node)
-                if future_node in self.origins:
-                    self.origins.remove(future_node)
-            
-            # lastly need to put the node back in order
-            # since some of the code relies on them being ordered
-            i = 0
-            node_placed = False
-            while i < len(self.nodes) and not node_placed:
-                if node.id > self.nodes[i].id:
-                    i += 1
-                else:
-                    self.nodes.insert(i, node)
-                    node_placed = True
-            # now we could get through the whole list
-            # and not end up placing the node cause it should
-            # go at the end, so let's catch that
-            if not node_placed:
-                self.nodes.append(node)
-
-
-        self.rebuild_adj_mat()
-
-    def filter_graph_by_area(self, area_filter, id=None, start_time=None, end_time=None):
-
-        filtered_adj_mat = self.adj_mat.copy()
-        filtered_nodes = []
-        for node in tqdm(self.nodes):
-            if node.area <= area_filter:
-                filtered_nodes.append(node)
-                node_id = node.id
+            if node.area > area_filter:
+                id = node.id
+                if id not in adj_dict_filtered.keys():
+                    adj_dict_filtered[id] = []
                 for future in node.future:
-                    filtered_adj_mat[node_id, future.id] = 0
-                for past in node.past:
-                    filtered_adj_mat[past.id, node_id] = 0
+                    if future.area > area_filter:
+                        adj_dict_filtered[id].append(future.id)
 
-        topog, __ = self.get_nx_network(id, start_time, end_time, filtered_adj_mat)
+        return adj_dict_filtered
+
+    def filter_adj_dict_by_id(self, id_filter):
+        """
+        """
+
+        adj_dict_filtered = dict()
+
+        for id in id_filter:
+            adj_dict_vals = self.adj_dict[id]
+            adj_dict_vals_filtered = []
+            for val in adj_dict_vals:
+                if val in id_filter:
+                    adj_dict_vals_filtered.append(val)
+            adj_dict_filtered[id] = adj_dict_vals_filtered
+
+        return adj_dict_filtered
+    
+    def create_animated_gif(self, out_path:str, adj_dict=None, fps=2, overwrite=False):
         
-        for node in tqdm(filtered_nodes):
+        fig, ax = plt.subplots()
+        ax.invert_yaxis()
+        
+        if adj_dict is None:
+            adj_dict = self.adj_dict
+        created_array = self.to_array(adj_dict=adj_dict)
+        frames = created_array.shape[0]
+        def animate(i):
+            return (ax.pcolormesh(created_array[i, :, :]),)
+        
+        ani = mpl.animation.FuncAnimation(fig, animate, frames=frames, blit=True)
+        writer = mpl.animation.PillowWriter(fps=fps)
+        if os.path.exists(out_path) and not overwrite:
+            raise Exception('File already exists. Please delete or enable overwrite.')
+        else:
             try:
-                topog.remove_node(node.id)
+                os.remove(out_path)
             except:
                 pass
+            ani.save(out_path, writer=writer)
+        plt.close()
         
-        pos = nx.drawing.nx_agraph.graphviz_layout(topog, prog= 'dot')
-
-        return topog, pos
-
+        
