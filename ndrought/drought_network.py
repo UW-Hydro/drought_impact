@@ -9,6 +9,13 @@ import pickle
 from datetime import datetime
 import os
 
+import ndrought.plotting as ndplot
+
+import matplotlib.animation
+from matplotlib.animation import FuncAnimation
+plt.rcParams["animation.html"] = "html5"
+
+
 class EventNode():
 
     def __init__(self, time, area, coords, id):
@@ -754,20 +761,42 @@ class DroughtNetwork:
 
         return adj_dict_filtered
     
-    def create_animated_gif(self, out_path:str, adj_dict=None, fps=2, overwrite=False):
-        
+    def create_animated_gif(self, out_path:str, adj_dict=None, fps=2, overwrite=False, times=None, nonbinary_data=None):
         fig, ax = plt.subplots()
-        ax.invert_yaxis()
         
         if adj_dict is None:
             adj_dict = self.adj_dict
-        created_array = self.to_array(adj_dict=adj_dict)
-        frames = created_array.shape[0]
-        def animate(i):
-            return (ax.pcolormesh(created_array[i, :, :]),)
+        animate_array = self.to_array(adj_dict=adj_dict)
+        if not nonbinary_data is None:
+            assert isinstance(nonbinary_data, np.ndarray)
+            if animate_array.shape != nonbinary_data.shape:
+                raise Exception("nonbinary_data does not match the size of this network's data")
+
+            mask = np.ma.make_mask(animate_array==0)
+            animate_array = np.ma.masked_where(mask, nonbinary_data)
+        frames = animate_array.shape[0]
+        
+        if times is None:
+            times = np.arange(frames)
+
+        if not nonbinary_data is None:
+            cmap = ndplot.usdm_cmap()
+            def animate(i):
+                ax.clear()
+                ax.invert_yaxis()
+                ax.set_title(times[i])
+                ax.set_facecolor('k')
+                return (ax.pcolormesh(animate_array[i, :, :], cmap=cmap, vmin=-1, vmax=4),)
+        else:
+        
+            def animate(i):
+                ax.clear()
+                ax.invert_yaxis()
+                ax.set_title(times[i])
+                return (ax.pcolormesh(animate_array[i, :, :]),)
         
         ani = mpl.animation.FuncAnimation(fig, animate, frames=frames, blit=True)
-        writer = mpl.animation.PillowWriter(fps=fps)
+        writer = mpl.animation.ImageMagickWriter(fps=fps)
         if os.path.exists(out_path) and not overwrite:
             raise Exception('File already exists. Please delete or enable overwrite.')
         else:
