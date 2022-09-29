@@ -729,7 +729,17 @@ class DroughtNetwork:
             return pickle.load(f)
 
     def filter_adj_dict_by_area(self, area_filter):
-        """
+        """Filters adjacency dictionary by area.
+
+        Parameters
+        ----------
+        area_filter: int/float
+            Numeric value to filter area by. Only areas
+            greater than this value will remain.
+        
+        Returns
+        -------
+        dict
         """
 
         adj_dict_filtered = dict()
@@ -746,7 +756,17 @@ class DroughtNetwork:
         return adj_dict_filtered
 
     def filter_adj_dict_by_id(self, id_filter):
-        """
+        """Filter adjacency dictionary by id.
+
+        Parameters
+        ----------
+        id_filter: array-like
+            id values to be retained in the adjacency
+            dictionary returned.
+        
+        Returns
+        -------
+        dict
         """
 
         adj_dict_filtered = dict()
@@ -762,6 +782,35 @@ class DroughtNetwork:
         return adj_dict_filtered
     
     def create_animated_gif(self, out_path:str, adj_dict=None, fps=2, overwrite=False, times=None, nonbinary_data=None):
+        """Create and save an animated gif of drought evolution.
+
+        Parameters
+        ----------
+        out_path: str
+            Where to save the animation to. Note that this function
+            does not output an animation to the terminal nor jupyter
+            cell, only to this saved location.
+        adj_dict, (optional): dict
+            Adjacency dictionary for selecting specific nodes in the
+            DroughtNetwork object. Default is to assume use of the
+            entire network.
+        fps, (optional): int
+            Frames per second to run the animation at, defaults to 2 fps.
+        overwrite, (optional): boolean
+            Whether to enable overwriting of the animation should the
+            file already exist. Defaults to False to prevent accidental
+            overwriting.
+        times, (optional): array-like
+            Animation frame titles, typically just the actual date since
+            the DroughtNetwork does not store time itself, only an
+            index of time.
+        nonbinary_data, (optional): np.ndarray
+            While the DroughtNetwork data only stores a binary
+            representation of drought based on the provided threshold,
+            this allows the user to pass in nonbinary data, (USDM
+            category expected based on color-coding), to use the
+            binary data as a mask and provide a more detailed animation.
+        """
         fig, ax = plt.subplots()
         
         if adj_dict is None:
@@ -806,5 +855,84 @@ class DroughtNetwork:
                 pass
             ani.save(out_path, writer=writer)
         plt.close()
+
+
+    def find_overlapping_nodes_events(self, other, matched_dates_dict_idx:dict):
+        """Find overlapping nodes with another DroughtNetwork.
+
+        Parameters
+        ----------
+        other: DroughtNetwork
+        matched_dates_dict_idx: dict
+            Map going from the time indices in self DroughtNetwork as
+            keys and other DroughtNetwork as values.
+        
+        Returns
+        -------
+        list[dict]
+            List of event threads that overlap between self and other,
+            where each element in the list is a dictionary mapping
+            what nodes are overlapping between the two DroughtNetworks
+            with the times of self as keys.
+
+            [[{self.time:[[self_overlapping_node, other_overlapping_node], ...]}], ...]
+
+        """
+
+        overlapped_nodes = dict()
+
+        # this can take a bit, so will make a progress bar
+        t = tqdm(total=len(self.nodes)*len(other.nodes))
+
+        for node_self in self.nodes:
+            # first need to see if the node's time is a matched time
+            time_idx = node_self.time
+            if time_idx in matched_dates_dict_idx.keys():
+                # will be testing overlap via set intersection
+                node_self_coord_set = set(tuple(coord) for coord in node_self.coords)
+                # now we need to find what time we are looking for
+                # in other that's matched up to the time we're looking at
+                matched_idx = matched_dates_dict_idx[time_idx]
+                for node_other in other.nodes:
+                    # if it's a temporal match
+                    if matched_idx == node_other.time:
+                        # then we'll carry through testing for spatial intersection
+                        node_other_coord_set = set(tuple(coord) for coord in node_other.coords)                        
+                        if len(node_self_coord_set.intersection(node_other_coord_set)) > 0:
+                            if time_idx not in overlapped_nodes.keys():
+                                overlapped_nodes[time_idx] = []
+                            overlapped_nodes[time_idx].append([node_self, node_other])
+
+                    t.update()
+
+        overlap_events = []
+
+        # okay, now to figure out which are the temporally consecutive
+        # events to have delineations between overlaps
+        current_event = []
+        for idx in overlapped_nodes.keys():
+            # if we currently aren't constructing an event,
+            # then we must be starting from scratch and will
+            # just toss it on to get started
+            if len(current_event) == 0:
+                current_event.append({idx:overlapped_nodes[idx]})
+            # now we want to see if they're consecutive
+            elif list(current_event[-1].keys())[0] == idx -1:
+                current_event.append({idx:overlapped_nodes[idx]})
+            # if they aren't consecutive, then we need to
+            # store the current event we were working on
+            # and start from scratch
+            else:
+                overlap_events.append(current_event)
+                current_event = [{idx:overlapped_nodes[idx]}]
+        
+        # lastly, if the final time is consecutive, then we
+        # won't end up storing in our events, so we should
+        # check whether it got stored and store it if not
+        if len(current_event) != 0 and overlap_events[-1] != current_event:
+            overlap_events.append(current_event)
+
+
+        return overlap_events        
         
         

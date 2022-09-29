@@ -133,7 +133,7 @@ def pair_to_usdm_date(usdm_dates:pd.DatetimeIndex, other_dates:pd.DatetimeIndex,
 
     return pair_dates
 
-def dm_to_usdmcat(da:xr.DataArray):
+def dm_to_usdmcat(da:xr.DataArray, percentiles=None):
     """Categorizes drought measure based on USDM categories.
 
     Uses the mapping scheme presented by USDM (https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx)
@@ -157,7 +157,12 @@ def dm_to_usdmcat(da:xr.DataArray):
     da_vals = da.values
     da_vals_nonnan = da_vals[np.isnan(da_vals) == False]
     # calculate percentiles
-    (p30, p20, p10, p5, p2) = np.percentile(da_vals_nonnan.ravel(), [30, 20, 10, 5, 2])
+    if percentiles is None:
+        (p30, p20, p10, p5, p2) = np.percentile(da_vals_nonnan.ravel(), [30, 20, 10, 5, 2])
+    else:
+        if len(percentiles) != 5:
+            raise Exception('percentiles should specify thresholds for neutral, D0, D1, D2, D3, and D4')
+        (p30, p20, p10, p5, p2) = percentiles
     # get a copy to make sure reassignment isn't compounding
     da_origin = da_vals.copy()
 
@@ -179,7 +184,7 @@ def dm_to_usdmcat(da:xr.DataArray):
 
     return da_copy
 
-def dm_to_usdmcat_multtime(ds:xr.Dataset):
+def dm_to_usdmcat_multtime(ds:xr.Dataset, percentiles=None):
     """Categorizes drought measure based on USDM categories for multiple times.
     
     See dm_to_usdmcat for further documentation.
@@ -195,9 +200,9 @@ def dm_to_usdmcat_multtime(ds:xr.Dataset):
         Drought measure categorized by dm_to_usdmcat.
     """
     if 'day' in ds.coords:
-        return dm_to_usdmcat(xr.concat([ds.sel(day=day) for day in ds['day'].values], dim='day'))
+        return dm_to_usdmcat(xr.concat([ds.sel(day=day) for day in ds['day'].values], dim='day'), percentiles=percentiles)
     elif 'time' in ds.coords:
-        return dm_to_usdmcat(xr.concat([ds.sel(time=t) for t in ds['time'].values], dim='time'))
+        return dm_to_usdmcat(xr.concat([ds.sel(time=t) for t in ds['time'].values], dim='time'), percentiles=percentiles)
     else:
         raise Exception('Time dimension not day or time')
 
