@@ -935,4 +935,30 @@ class DroughtNetwork:
 
         return overlap_events        
         
-        
+def compute_alignment_fraction(overlap_events):
+
+    net_af = []
+
+    for thread in overlap_events:
+        thread_af = dict()
+
+        for event in thread:
+            time = list(event.keys())[0]
+
+            event_a = np.array(event[time])[:, 0]
+            coords_a = np.vstack([node.coords for node in event_a])
+            coord_set_a = set(tuple(coord) for coord in coords_a)
+
+            event_b = np.array(event[time])[:, 1]
+            coords_b = np.vstack([node.coords for node in event_b])
+            coord_set_b = set(tuple(coord) for coord in coords_b)
+
+            coord_set_intersect = coord_set_a.intersection(coord_set_b)
+            coord_set_union = coord_set_a.union(coord_set_b)
+
+            thread_af[time] = len(coord_set_intersect)/len(coord_set_union)
+    
+        net_af.append(thread_af)
+
+    return net_af
+

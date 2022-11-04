@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import networkx as nx
 
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
@@ -187,4 +188,50 @@ def usdm_cmap():
     """
     usdm_colors=["white","yellow","navajowhite","orange","crimson","darkred"]
     return mpl.colors.LinearSegmentedColormap.from_list("UDSM", usdm_colors)
+
+def attach_dm_node_label(G, dm_name:str):
+    relabel_dict = dict()
+
+    for node in G.nodes:
+        relabel_dict[node] = f'{dm_name}_{node}'
+
+    return nx.relabel_nodes(G, relabel_dict)
+
+def weight_by_area_ratio(dn, adj_dict=None):
+
+    if adj_dict is None:
+        adj_dict = dn.adj_dict
+    G = nx.MultiDiGraph(adj_dict)
+
+    edges = []
+    for source in adj_dict:
+        for destination in adj_dict[source]:
+            source_area = dn.nodes[source].area
+            destination_area = dn.nodes[destination].area
+            weight = destination_area/source_area
+
+            G[source][destination][0]["weight"] = weight
+
+    return G
+    
+def connect_overlap_nodes(G, overlap, name_a:str, name_b:str, inverse_edges=False):
+   
+    for event in overlap:
+        for time in event:
+            for overlap_nodes in time.values():
+                for node_a, node_b in overlap_nodes:
+                   
+                    node_a_name = f'{name_a}_{node_a.id}'
+                    node_b_name = f'{name_b}_{node_b.id}'
+                    
+                    if node_a_name in G.nodes and node_b_name in G.nodes:
+                    
+                        node_a_area = node_a.area
+                        node_b_area = node_b.area
+
+                        G.add_edge(node_a_name, node_b_name, weight=node_b_area/node_a_area)
+                        if inverse_edges:
+                            G.add_edge(node_b_name, node_a_name, weight=node_a_area/node_b_area)
+    
+    return G
 
