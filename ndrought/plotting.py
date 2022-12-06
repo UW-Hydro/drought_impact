@@ -10,6 +10,8 @@ from sklearn.metrics import r2_score
 
 from ndrought.wrangle import da_summary_stats
 
+import matplotlib.dates as mdates
+
 
 def plot_moy_overlay(da: xr.DataArray, ax=None, start_year=None, end_year=None, 
                     cmap=None, cbar=False, color=None, alpha=1, label=True):
@@ -234,4 +236,50 @@ def connect_overlap_nodes(G, overlap, name_a:str, name_b:str, inverse_edges=Fals
                             G.add_edge(node_b_name, node_a_name, weight=node_a_area/node_b_area)
     
     return G
+
+def plot_stacked_caf(caf_ds, vars, fig=None, axs=None, show_cbar=False):
+
+    cats = ['neutral_wet', 'D0', 'D1', 'D2', 'D3', 'D4']
+    usdm_colors=["white","yellow","navajowhite","orange","crimson","darkred"]
+
+    if axs is None or ((fig is None) & show_cbar):
+        fig, axs = plt.subplots(len(vars), 1, figsize=(15,15), sharex=True)
+
+    try:
+        axs = axs.ravel()
+    except:
+        axs = [axs]
+
+    dates = caf_ds['date'].values
+
+    for ax, dm_var in zip(axs, vars):
+        cumulative = np.zeros(len(caf_ds['date']))
+        for cat, color in zip(np.flip(cats), np.flip(usdm_colors)):
+            ax.fill_between(dates, cumulative, caf_ds[f'{dm_var}_{cat}'].values+cumulative, color=color)
+            cumulative += caf_ds[f'{dm_var}_{cat}'].values
+
+        ax.set_ylim(0,1)
+        ax.set_xlim(dates[0], dates[-1])
+        ax.set_ylabel(dm_var, fontsize=12)
+
+        # helps point out missing data
+        ax.set_facecolor('k')
+
+        # fix the formating to only show hours
+        formatter = mdates.DateFormatter('%Y')
+        ax.xaxis.set_major_formatter(formatter)
+        # set the frequency to not crowd the axis
+        ax.set_xticks(pd.date_range(dates[0], dates[-1], freq='1Y'))
+
+    if show_cbar:
+        cbar_ax = fig.add_axes([1.01, 0.15, 0.025, 0.7])
+        cmap = ndplot.usdm_cmap()
+        bounds = np.linspace(-1, 5, 7)
+        norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+        cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), cax=cbar_ax, ticks=bounds)
+        cbar.set_ticklabels(['Neutral/Wet', 'D0', 'D1', 'D2', 'D3', 'D4', ''], size=15)
+
+        return fig, axs
+
+    return axs
 

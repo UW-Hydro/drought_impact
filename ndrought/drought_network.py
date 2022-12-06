@@ -217,7 +217,7 @@ class DroughtNetwork:
         # go through and setup network
         last_nodes = []
         id = 0
-        for i in tqdm(np.arange(data.shape[0])):
+        for i in tqdm(np.arange(data.shape[0]), desc=f'Creating Network: {name}'):
             nodes_i, id = create_EventNodes(data[i,:,:], time=i, id=id, threshold=threshold)
             # see if we currently found some droughts
             if len(nodes_i) > 0:
@@ -726,7 +726,8 @@ class DroughtNetwork:
 
     def unpickle(path):
         with open(path, 'rb') as f:
-            return pickle.load(f)
+            unpickler = pickle.Unpickler(f)
+            return unpickler.load()
 
     def filter_adj_dict_by_area(self, area_filter):
         """Filters adjacency dictionary by area.
@@ -817,9 +818,9 @@ class DroughtNetwork:
             adj_dict = self.adj_dict
         animate_array = self.to_array(adj_dict=adj_dict)
         if not nonbinary_data is None:
-            assert isinstance(nonbinary_data, np.ndarray)
-            if animate_array.shape != nonbinary_data.shape:
-                raise Exception("nonbinary_data does not match the size of this network's data")
+            #assert isinstance(nonbinary_data, np.ndarray)
+            #if animate_array.shape != nonbinary_data.shape:
+            #    raise Exception("nonbinary_data does not match the size of this network's data")
 
             mask = np.ma.make_mask(animate_array==0)
             animate_array = np.ma.masked_where(mask, nonbinary_data)
@@ -882,7 +883,7 @@ class DroughtNetwork:
         overlapped_nodes = dict()
 
         # this can take a bit, so will make a progress bar
-        t = tqdm(total=len(self.nodes)*len(other.nodes))
+        t = tqdm(total=len(self.nodes)*len(other.nodes), desc=f'Overlapping {self.name} & {other.name}')
 
         for node_self in self.nodes:
             # first need to see if the node's time is a matched time
@@ -961,4 +962,204 @@ def compute_alignment_fraction(overlap_events):
         net_af.append(thread_af)
 
     return net_af
+
+def compute_total_alignment_fraction(overlap_events):
+
+    intersect_total = 0
+    union_total = 0
+
+    for thread in overlap_events:
+        for event in thread:
+            time = list(event.keys())[0]
+
+            event_a = np.array(event[time])[:, 0]
+            coords_a = np.vstack([node.coords for node in event_a])
+            coord_set_a = set(tuple(coord) for coord in coords_a)
+
+            event_b = np.array(event[time])[:, 1]
+            coords_b = np.vstack([node.coords for node in event_b])
+            coord_set_b = set(tuple(coord) for coord in coords_b)
+
+            coord_set_intersect = coord_set_a.intersection(coord_set_b)
+            coord_set_union = coord_set_a.union(coord_set_b)
+
+            intersect_total += len(coord_set_intersect)
+            union_total += len(coord_set_union)
+    
+    return intersect_total/union_total
+
+def compute_disagreement_fraction(a_net, b_net, overlap_events):
+
+    a_overlapped = dict()
+    b_overlapped = dict()
+    times = []
+
+    for thread in overlap_events:
+        for event in thread: 
+            time = list(event.keys())[0]
+
+            if not time in a_overlapped.keys():
+                a_overlapped[time] = []
+            if not time in b_overlapped.keys():
+                b_overlapped[time] = []
+
+            event_a = np.array(event[time])[:, 0]
+            event_b = np.array(event[time])[:, 1]
+            times.append(time)
+
+            a_overlapped[time].extend(np.hstack(event_a))
+            b_overlapped[time].extend(np.hstack(event_b))
+
+    a_nodes = dict()
+    b_nodes = dict()
+
+    a_not_overlapped = dict()
+    b_not_overlapped = dict()
+
+    for node in a_net.nodes:
+        time = node.time
+        
+        if not time in a_nodes.keys():
+            a_nodes[time] = []
+        a_nodes[time].append(node)
+
+        if not time in a_overlapped.keys() or not node in a_overlapped[time]:
+            if time not in a_not_overlapped.keys():
+                a_not_overlapped[time] = []
+            a_not_overlapped[time].append(node)
+
+    for node in b_net.nodes:
+        time = node.time
+
+        if not time in b_nodes.keys():
+            b_nodes[time] = []
+        b_nodes[time].append(node)
+
+        if not time in b_overlapped.keys() or not node in b_overlapped[time]:
+            if time not in b_not_overlapped.keys():
+                b_not_overlapped[time] = []
+            b_not_overlapped[time].append(node)
+
+    a_df = dict()
+    b_df = dict()
+
+    for time in a_not_overlapped.keys():
+        all_nodes = a_nodes[time]
+        not_overlapped_nodes = a_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        a_df[time] = not_overlapped_area/total_area
+
+    for time in b_not_overlapped.keys():
+        all_nodes = b_nodes[time]
+        not_overlapped_nodes = b_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        b_df[time] = not_overlapped_area/total_area
+
+    return a_df, b_df
+
+def compute_total_disagreement_fraction(a_net, b_net, overlap_events):
+
+    a_overlapped = dict()
+    b_overlapped = dict()
+    times = []
+
+    for thread in overlap_events:
+        for event in thread: 
+            time = list(event.keys())[0]
+
+            if not time in a_overlapped.keys():
+                a_overlapped[time] = []
+            if not time in b_overlapped.keys():
+                b_overlapped[time] = []
+
+            event_a = np.array(event[time])[:, 0]
+            event_b = np.array(event[time])[:, 1]
+            times.append(time)
+
+            a_overlapped[time].extend(np.hstack(event_a))
+            b_overlapped[time].extend(np.hstack(event_b))
+
+    a_nodes = dict()
+    b_nodes = dict()
+
+    a_not_overlapped = dict()
+    b_not_overlapped = dict()
+
+    for node in a_net.nodes:
+        time = node.time
+        
+        if not time in a_nodes.keys():
+            a_nodes[time] = []
+        a_nodes[time].append(node)
+
+        if not time in a_overlapped.keys() or not node in a_overlapped[time]:
+            if time not in a_not_overlapped.keys():
+                a_not_overlapped[time] = []
+            a_not_overlapped[time].append(node)
+
+    for node in b_net.nodes:
+        time = node.time
+
+        if not time in b_nodes.keys():
+            b_nodes[time] = []
+        b_nodes[time].append(node)
+
+        if not time in b_overlapped.keys() or not node in b_overlapped[time]:
+            if time not in b_not_overlapped.keys():
+                b_not_overlapped[time] = []
+            b_not_overlapped[time].append(node)
+
+    a_not_overlapped_total = 0
+    a_area_total = 0
+
+    b_not_overlapped_total = 0
+    b_area_total = 0
+
+    for time in a_not_overlapped.keys():
+        all_nodes = a_nodes[time]
+        not_overlapped_nodes = a_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        a_not_overlapped_total += not_overlapped_area
+        a_area_total += total_area
+
+    for time in b_not_overlapped.keys():
+        all_nodes = b_nodes[time]
+        not_overlapped_nodes = b_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        b_not_overlapped_total += not_overlapped_area
+        b_area_total += total_area
+
+    return a_not_overlapped_total/a_area_total, b_not_overlapped_total/b_area_total
 
