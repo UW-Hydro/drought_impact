@@ -14,6 +14,11 @@ Updated: 6.8.2022
 
 Examining data with a specific objective.
 
+### **`agu_plots.ipynb`**
+November 2022
+
+Plots for the AGU 2022 Fall Meeting.
+
 ### **`all_dm_compare_paired.ipynb`**
 8.8.2022
 
@@ -58,6 +63,16 @@ The notebook also includes some summary time series and CDF plots for quick view
 
 Combines FDSI and Mt. Rainier National Park visitation data in an effort to look for a relationship.
 
+### **`nexus_correlations.ipynb`**
+10.11.2022
+
+Paired Pixel Correlation (PPC) between metrics.
+
+### **`nexus_scatters.ipynb`**
+9.14.2022
+
+Developed temporal pairing between two metrics, and improved workflow for spatial pairing between two metrics as well. PPC used in `nexus_correlations.ipynb` was first explored here, then continued there for cleanliness.
+
 ### **`nonparametric_met_regression.ipynb`**
 
 03.16.2022
@@ -75,6 +90,13 @@ Develop functions to plot and extract anomalies for park data.
 03.10.2022
 
 Examine relationships and potential for correlation between park visitation data and meteorological data, (currently precipitation, max air temperature, minimum air temperature).
+
+### **`small_nexus_2015_drought.ipynb`**
+11.1.2022
+
+So drawing the entire nexus is too big, even for `pyvis`. Also, doing any computations on a graph that has multiple drought threads (meaning a discontinuous graph) greatly interferes with efforts to measure connectivity. So here I want to try isolating a drought thread to do a smaller scale analysis. For this I'll use the 2015 drought.
+
+Ultimately the attempt was abandoned due to the smaller scale still not working well.
 
 ### **`usdm_spi_catfreq.ipynb`**
 
@@ -118,6 +140,16 @@ Instead of aggregating into area fractions, this notebook aims to do a pixel res
 
 Delving into data without any particular objective, or looking to develop a workflow but not perform analysis.
 
+### **`animate_drought_network_thread.ipynb`**
+8.31.2022
+
+Now that the adjacency dictionary is implemented fine thanks to `drought_network_graph_manipulate.ipynb` and easy to maneuver, let's try to get an animation out of a pulled out thread returned to array.
+
+### **`chord_diagrams.ipynb`**
+11.28.2022
+
+Developing some chord diagrams to make plots, exploring with various summary metrics and filtering to best highlight stories in the data.
+
 ### **`drought_center_of_mass.ipynb`**
 7.7.2022
 
@@ -128,6 +160,13 @@ Perhaps a way to evaluate spatial changes is to calculate a center of mass weigh
 Date unknown.
 
 Beginning exploration of WA Drought declaration distribution and frequency.
+
+### **`drought_event_comparison.ipynb`**
+11.3.2022
+
+Goal: compare evolution of drought between 2 different metrics.
+
+First development of Alignment Fraction (AF), Disagreement Fraction (DF), and Inertia for the Washington 2015 drought between USDM and PDSI.
 
 ### **`drought_event_network.ipynb`**
 7.28.2022
@@ -143,7 +182,7 @@ A useful piece of information would be how big different droughts get because ea
 ???
 In progress
 
-### **`drought_network_filter_and_mapping.ipynb`
+### **`drought_network_filter_and_mapping.ipynb`**
 8.16.2022
 
 This notebook delves into the `DroughtNetwork` class developed in `explore/drought_event_network` and `explore/network_refinement`. Here I look into filtering by area to reduce noise (and disconnecting appropriate events where needed due to filter), adding a few more plot coloring, and converting the DroughtNetwork back out into an image.
@@ -152,6 +191,13 @@ This notebook delves into the `DroughtNetwork` class developed in `explore/droug
 8.29.2022
 
 Upon wanting to improve filtering and other graph manipulation operations, I'm seeing the adjacency matrix as perhaps not the best method to do this. Here I will explore with adjacency lists instead and being able to include/exclude nodes with (hopefully) greater easy and coding simplicity.
+
+### **`drought_network_overlap.ipynb`**
+9.20.2022
+
+Here I want to look into tracing how the same drought evolves differently in different metrics.
+
+Finds overlapping events between two drought networks.
 
 ### **`drought_network_refinement.ipynb`**
 8.4.2022
@@ -162,6 +208,15 @@ This picks up where `explore/drought_event_network.ipynb` left off, presenting a
 8.29.2022
 
 This notebook delves into comparing drought networks with a bit of a delve into graph theory.
+
+### **`drought_network_weighted_nexus.ipynb`**
+9.22.2022
+
+So this is a bit of an experimental idea. In exploring the CAF plots, I came to realize that just because the percent of the state in drought might be the same between two measures, doesn't mean it's the same drought. Only considering this aggregated measure looses the diverse topography of the state and the nuances in how drought evolves differently between metrics. This makes the drought network, and examining overlapping events (`explore/drought_network_overlap.ipynb`), rather important when comparing drought evolution and describing similarities ... which can be done with side-by-side animations that were also developed in that notebook, but it would be helpful to have more analytic means of comparing.
+
+This is where the Drought Nexus takes actual shape. I plan to connect the graphs of multiple drought networks via these overlaps. To preserve identification of which node goes to which measure, I'll need to rename the id's something like `dm_{i}`. But then there is one further step I want to take: weighting the graph by area ratios. Each edge will be weighted as a ratio of origin_area to destination_area (if a --> b, then the weight of their connecting edge would be b_area/a_area). This will allow for an understanding of how the drought event is growing (weight > 1), shrinking (weight < 1), or staying the same (weight = 1). As for the weights then between drought measure graphs, which is the numerator and which the denominator will need to be specified ... or an edge could be created each way, following destination_area/origin_area
+
+With the Drought Nexus graph, I can visualize connectivity patterns between all the drought metrics, and see what is commonly agreed upon and what is unique.
 
 ### **`explore_animation.ipynb`**
 
@@ -206,6 +261,14 @@ Explores rescaling USDM & SPI to match each other, creating the UDSM colorbar, h
 ## organize_data
 
 Compiling, sorting, and developing structure to data.
+
+### **`clip_cat_dms_graceless.ipynb`**
+9.9.2022
+
+Following the work of `organize_data/clip_cat_spei.ipynb`, this notebook looks to clip and categorize the remaining drought measures since the workflow is fairly identical. I want to only use the ones that are weekly at sparsest. These are:
+- grace (REMOVED FROM THIS NOTEBOOK)
+- palmer z
+- pdsi
 
 ### **`clip_cat_dms.ipynb`**
 7.20.2022
@@ -280,6 +343,11 @@ Processes and organizes hunting and fishing license data.
 ## quality_control
 
 Checking on work done in ways that typically gets more in the weeds and away from analysis itself to verify product accuracy.
+
+### **`dm_quantile_check.ipynb`**
+9.7.2022
+
+Here I want to double check that the quantiles used to categorize into USDM categories are sound, or at least as sound as they can be without an objective truth anywho.
 
 ### **`grace_data_check.ipynb`**
 Week of 8.22.2022
