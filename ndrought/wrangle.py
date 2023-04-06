@@ -16,6 +16,8 @@ import geopandas as gpd
 import matplotlib as plt
 from tqdm.autonotebook import tqdm
 
+import pickle
+
 import skimage
 
 from skimage.color import rgb2gray
@@ -887,4 +889,74 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
 
     return ax
 
+def convert_pickle_to_dtd(path):
+    """convert drought tracks pickled to drought track dict"""
+    with open(path, 'rb') as f:
+        unpickler = pickle.Unpickler(f)
+        dt = unpickler.load()
+
+    dtd = dict()
+    vars = ['x', 'y', 'u', 'v', 't', 'c', 'a']
+
+    for tracks, var in zip(dt, vars):
+        var_tracks = []
+        for track in tracks:
+            var_tracks.append(np.array(track))
+        dtd[var] = var_tracks
+
+    return dtd
+
+def compute_track_lifetime(t_track, to_days):
+    track_lifetime = []
+
+    for times in t_track:
+        track_lifetime.append((np.max(times) - np.min(times))*to_days)
+
+    return track_lifetime
+
+def compute_distance(u,v):
+    return np.sqrt(np.power(u, 2)+np.power(v, 2))
+
+def compute_track_distance(u_track, v_track):
+    distance = []
+    for u, v in zip(u_track, v_track):
+        distance.append(compute_distance(u,v).sum())
+    return distance
+
+def compute_track_displacement(x_track, y_track, u_track, v_track):
+    displacement = []
+
+    for x, y, u, v in zip(x_track, y_track, u_track, v_track):
+        del_x = u[-1]+x[-1]-(x[0])
+        del_y = v[-1]+y[-1]-(y[0])
+
+        displacement.append(compute_distance(del_x, del_y))
     
+    return displacement
+
+def compute_track_similarity(a_track):
+    return [a.sum()/len(a) for a in a_track]
+
+def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60, 90, 180, 365, 730, 1825, 7*1163]):
+    x_track = dtrack_dict['x']
+    y_track = dtrack_dict['y']
+    u_track = dtrack_dict['u']
+    v_track = dtrack_dict['v']
+    t_track = dtrack_dict['t']
+    a_track = dtrack_dict['a']
+
+    lifetimes = compute_track_lifetime(t_track, to_days)
+    distances = compute_track_distance(u_track, v_track)
+    displacements = compute_track_displacement(x_track, y_track, u_track, v_track)
+    similarity = compute_track_similarity(a_track)
+
+    summary_df = pd.DataFrame(index=np.arange(len(lifetimes)))
+    summary_df['lifetime'] = lifetimes
+    summary_df['distance'] = distances
+    summary_df['displacement'] = displacements
+    summary_df['average velocity'] = summary_df['distance']/summary_df['lifetime']
+    summary_df['similarity'] = similarity
+
+    #return summary_df
+
+    return summary_df, summary_df.groupby(pd.cut(summary_df.lifetime, bins=bins)).agg(['mean', 'median', 'max', 'min', 'std', 'count'])

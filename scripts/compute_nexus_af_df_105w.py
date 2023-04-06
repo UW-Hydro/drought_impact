@@ -2,7 +2,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-from tqdm.tqdm import tqdm
+from tqdm import tqdm
 
 import sys
 sys.path.append('../')
@@ -125,7 +125,7 @@ for date, var in zip(all_dates, dm_vars):
 
         grace_pairings[var] = compare.pair_dates(grace_dates, date, 'grace', var, realign=True, method=method)
 print('... GRACE dates paired')
-print()
+print()z
 
 all_date_pairings = {
     'usdm':usdm_pairings,

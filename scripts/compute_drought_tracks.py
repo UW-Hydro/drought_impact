@@ -17,45 +17,6 @@ import pickle
 sys.setrecursionlimit(int(1e4))
 
 
-# load in data
-print('Loading Data')
-dm_path = '/pool0/home/steinadi/data/drought/drought_impact/data/drought_measures'
-
-usdm = xr.open_dataset(f'{dm_path}/usdm/USDM_CONUS_105W_20000104_20220412.nc').load()
-print('... USDM loaded')
-intervals = ['14d', '30d', '90d', '180d', '270d', '1y', '2y', '5y', ]
-spi = xr.open_dataset(f'{dm_path}/spi/CONUS_105W/spi_usdmcat_CONUS_105W.nc').load()
-print('... SPI loaded')
-spei = xr.open_dataset(f'{dm_path}/spei/CONUS_105W/spei_usdmcat_CONUS_105W.nc').load()
-print('... SPEI loaded')
-eddi = xr.open_dataset(f'{dm_path}/eddi/CONUS_105W/eddi_usdmcat_CONUS_105W.nc').load()
-print('... EDDI loaded')
-pdsi = xr.open_dataset(f'{dm_path}/pdsi/CONUS_105W/pdsi.nc').load()
-print('... PDSI loaded')
-
-grace = xr.open_dataset(f'{dm_path}/grace/CONUS_105W/grace_usdmcat_CONUS_105W.nc').load()
-grace_vars = ['gws', 'rtzsm', 'sfsm']
-print('... GRACE loaded')
-
-# make some shorthand dictionaries
-dm_vars_expanded = {
-    'usdm':['USDM'],
-    'spi':[f'spi_{interval}' for interval in intervals],
-    'spei':[f'spei_{interval}' for interval in intervals],
-    'eddi':[f'eddi_{interval}' for interval in intervals],
-    'pdsi':['pdsi'],
-    'grace':grace_vars
-}
-
-all_dm_ds = {
-    'usdm':usdm,
-    'spi':spi,
-    'spei':spei,
-    'eddi':eddi,
-    'pdsi':pdsi,
-    'grace':grace
-}
-
 def to_y(y, y_meta):
     y_min, y_max, y_spacing = y_meta
     return ((y_min-y_max)/y_spacing)*(y)+y_max
@@ -81,7 +42,7 @@ def collect_drought_track(args):
     t_list = []
     alpha_list = []
 
-    origin, net_adj_dict, net_centroids, s_thresh, cmap = args
+    (origin, net_adj_dict, net_centroids, s_thresh, cmap) = args
 
     q = Queue()
     q.put(origin.id)
@@ -112,12 +73,11 @@ def collect_drought_track(args):
     if len(t_list) > 0:
         t_min = np.min(t_list)
         t_max = np.max(t_list)
-        color_list = [cmap((t-t_min)/(t_max-t_min))[:-1] for t in t_list]
+        color_list = [cmap(np.round((t-t_min)/(t_max-t_min), 4))[:-1] for t in t_list]
 
     return x_list, y_list, u_list, v_list, t_list, color_list, alpha_list
 
-
-def extract_drought_tracks(net, coord_meta, cmap=plt.cm.get_cmap('viridis'), s_thresh=0, pool=mp.Pool(processes=40)):
+def extract_drought_tracks(net, coord_meta, cmap=plt.cm.get_cmap('viridis'), s_thresh=0):
 
     net_centroids = {node.id:(*to_xy(node.coords.mean(axis=0), coord_meta), node.time, len(node.coords)) for node in net.nodes}
 
@@ -125,71 +85,132 @@ def extract_drought_tracks(net, coord_meta, cmap=plt.cm.get_cmap('viridis'), s_t
     y_tracks = []
     u_tracks = []
     v_tracks = []
+    t_tracks = []
     color_tracks = []
     alpha_tracks = []
 
-    args = []
-    for origin in net.origins:
-
+    valid_origins = []
+    for origin in tqdm(net.origins[350:], desc='Collecting Valid Origins'):
         # the ones that are one-off events I don't want to plot
-        if len(origin.future) > 0:
-            args.append([origin, net.adj_dict, net_centroids, s_thresh, cmap])
-            
-    results = pool.map(collect_drought_track, tqdm(args, desc=f"Extracting Tracks from {net.name}"))    
+        if len(origin.future) > 0:           
+            valid_origins.append(origin)
+
+    print(f'{len(valid_origins)} Valid Origins Found')
+
+    results = []
+
+    for o in tqdm(valid_origins, desc=f'Extracting Tracks from {net.name}'):
+        try:
+            results.append(collect_drought_track(o, net.adj_dict, net_centroids, s_thresh, cmap))
+        except:
+            pass
+
+    if len(results) != len(valid_origins):
+        print(f'>>>>>>>>>> LOST {len(valid_origins) - len(results)} TRACKS <<<<<<<<<<<')
         
     for result in tqdm(results, desc='Reshaping and Packaging'):
-        x_list, y_list, u_list, v_list, color_list, alpha_list = result
+        x_list, y_list, u_list, v_list, t_list, color_list, alpha_list = result
 
         x_tracks.append(x_list)
         y_tracks.append(y_list)
         u_tracks.append(u_list)
         v_tracks.append(v_list)
+        t_tracks.append(t_list)
         color_tracks.append(color_list)
         alpha_tracks.append(alpha_list)
 
 
-    return x_tracks, y_tracks, u_tracks, v_tracks, color_tracks, alpha_tracks
+    return x_tracks, y_tracks, u_tracks, v_tracks, t_tracks, color_tracks, alpha_tracks
 
+if __name__ == "__main__":
 
-# compute drought networks if not already made
-for var in dm_vars_expanded.keys():
-    for var_exp in dm_vars_expanded[var]:
-        dnet_path = f'{dm_path}/ndrought_products/CONUS_105W/individual_dnet/{var_exp}_net.pickle'
+    # load in data
+    print('Loading Data')
+    dm_path = '/pool0/home/steinadi/data/drought/drought_impact/data/drought_measures'
 
-        track_path = f'{dm_path}/ndrought_products/CONUS_105W/drought_tracks/{var_exp}_tracks.pickle'        
+    usdm = xr.open_dataset(f'{dm_path}/usdm/USDM_CONUS_105W_20000104_20220412.nc').load()
+    print('... USDM loaded')
 
-        if os.path.exists(dnet_path):
-            var_dnet = dnet.DroughtNetwork.unpickle(dnet_path)            
-        else:
-            var_dnet = dnet.DroughtNetwork(all_dm_ds[var][var_exp].values, name=f'{var_exp.upper()} Drought Network')
-            var_dnet.pickle(dnet_path)            
+    intervals = ['14d', '30d', '90d', '180d', '270d', '1y', '2y', '5y', ]
+    spi = xr.open_dataset(f'{dm_path}/spi/CONUS_105W/spi_usdmcat_CONUS_105W.nc').load()
+    print('... SPI loaded')
+    spei = xr.open_dataset(f'{dm_path}/spei/CONUS_105W/spei_usdmcat_CONUS_105W.nc').load()
+    print('... SPEI loaded')
+    eddi = xr.open_dataset(f'{dm_path}/eddi/CONUS_105W/eddi_usdmcat_CONUS_105W.nc').load()
+    print('... EDDI loaded')
+    pdsi = xr.open_dataset(f'{dm_path}/pdsi/CONUS_105W/pdsi.nc').load()
+    print('... PDSI loaded')
 
-        if not os.path.exists(track_path):
+    grace = xr.open_dataset(f'{dm_path}/grace/CONUS_105W/grace_usdmcat_CONUS_105W.nc').load()
+    grace_vars = ['gws', 'rtzsm', 'sfsm']
+    print('... GRACE loaded')
 
-            x_coords = all_dm_ds[var][var_exp].x.values
-            y_coords = all_dm_ds[var][var_exp].y.values
+    # make some shorthand dictionaries
+    dm_vars_expanded = {
+        'usdm':['USDM'],
+        'spi':[f'spi_{interval}' for interval in intervals],
+        'spei':[f'spei_{interval}' for interval in intervals],
+        'eddi':[f'eddi_{interval}' for interval in intervals],
+        'pdsi':['pdsi'],
+        'grace':grace_vars
+    }
 
-            coord_meta = (
-                np.min(y_coords), np.max(y_coords), len(y_coords),
-                np.min(x_coords), np.max(x_coords), len(x_coords)
-            )
+    all_dm_ds = {
+        'usdm':usdm,
+        'spi':spi,
+        'spei':spei,
+        'eddi':eddi,
+        'pdsi':pdsi,
+        'grace':grace
+    }
 
-            var_tracks = extract_drought_tracks(
-                net=var_dnet,
-                coord_meta=coord_meta
-            )
+    # compute drought networks if not already made
+    for var in dm_vars_expanded.keys():
+        for var_exp in dm_vars_expanded[var]:
+            dnet_path = f'{dm_path}/ndrought_products/CONUS_105W/individual_dnet/{var_exp}_net.pickle'
 
-            f = open(track_path, 'wb')
-            pickle.dump(var_tracks, f, pickle.HIGHEST_PROTOCOL)
-            f.close()
+            track_path = f'{dm_path}/ndrought_products/CONUS_105W/drought_tracks/{var_exp}_tracks.pickle'        
 
-            x_coords = None
-            y_coords = None
-            coord_meta = None
-            var_tracks = None
-            f = None
+            if os.path.exists(dnet_path):
+                var_dnet = dnet.DroughtNetwork.unpickle(dnet_path)            
+            else:
+                var_dnet = dnet.DroughtNetwork(all_dm_ds[var][var_exp].values, name=f'{var_exp.upper()} Drought Network')
+                var_dnet.pickle(dnet_path)            
 
-        var_dnet = None
+            # tossing in an override
+            override = False
+            if not os.path.exists(track_path) or override:
 
-        gc.collect()
+                try:
+                    os.remove(track_path)
+                except:
+                    pass
+
+                x_coords = all_dm_ds[var][var_exp].x.values
+                y_coords = all_dm_ds[var][var_exp].y.values
+
+                coord_meta = (
+                    np.min(y_coords), np.max(y_coords), len(y_coords),
+                    np.min(x_coords), np.max(x_coords), len(x_coords)
+                )
+
+                var_tracks = extract_drought_tracks(
+                    net=var_dnet,
+                    coord_meta=coord_meta,
+                )
+
+                f = open(track_path, 'wb')
+                pickle.dump(var_tracks, f, pickle.HIGHEST_PROTOCOL)
+                f.close()
+
+                x_coords = None
+                y_coords = None
+                coord_meta = None
+                var_tracks = None
+                f = None
+
+            var_dnet = None
+            del all_dm_ds[var]
+
+            gc.collect()
 

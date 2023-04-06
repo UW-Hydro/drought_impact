@@ -207,3 +207,169 @@ def compute_r_multi_mp(ds:xr.Dataset, pool:mp.Pool, x_vars=list, y_vars=list, la
 
     return result_ds 
 
+def pair_dates(dates_a:pd.DatetimeIndex, dates_b:pd.DatetimeIndex, dates_a_name:str, dates_b_name:str, method='last-b', realign=False):
+    """Pairs dates between two metrics for comparison.
+    
+    Note that this was developed for SPI and USDM and should be double checked.
+
+    WARNING: The current catch for too-many dates provided is experimental.
+
+    Parameters
+    ----------
+    dates_a: DateTimeIndex
+    dates_b: DateTimeIndex
+    dates_a_name: str
+        Name of dates_a.
+    dates_b_name: str
+        Name of dates_b.
+    method: str
+        How to pair dates between dates_a and dates_b. The following are
+        currently supported:
+        - last-a: match dates_b to the last dates_a available. Use if there
+            is reason to believe that measure A informs measure B
+        - last-b: match dates_a to the last dates_b available. Use if there
+            is reason to believe that measure B informs measure A
+        - nearest: dates are paired by their nearest neighbors, dropping any
+            dates that are not chosen in the process. Use if there is no
+            reason to believe A nor B inform each other and do not want
+            an aggregate process
+
+        To come:
+        - cluster-a: match all dates_b to their nearest dates_a, which
+            can result in multiple dates being assigned to a date in dates_a
+            and an aggregation scheme should be used in the data. Use if
+            believe B informs A and wanting to allow for multi-pairing.
+        - cluster-b: match all dates_a to their nearest dates_b, which
+            can result in multiple dates being assigned to a date in dates_b
+            and an aggregation scheme should be used in the data. Use if
+            believe A informs B and wanting to allow for multi-pairing.
+        - cluster-nearest: each date is assigned to the nearest other date,
+            being the only method to guarantee no dates are dropped in pairing.
+            Use if there is no strong belief that one measure dominantly
+            influences the other and wanting to allow for multi-pairing.
+    realign: boolean, (optional)
+        Whether to automatically clip dates to ensure proper pairing,
+        defaults as False.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame where each row pairs an dates_b to a dates_a.
+    """
+
+    # check if times are too far out of alignment
+    if dates_a[-1] - pd.Timedelta(days=7) > dates_b[-1]:
+        if realign:
+            dates_a = dates_a[dates_a <= dates_b[-1] + pd.Timedelta(days=7)]
+        else:
+            raise Exception('dates_a extends more than a week beyond dates_b, resulting in an inability to pair. Please adjust dates_a accordingly or set realign=True to (experimentally) automatically correct.')
+    if dates_b[-1] - pd.Timedelta(days=7) > dates_a[-1]:
+        if realign:
+            dates_b = dates_b[dates_b <= dates_a[-1] + pd.Timedelta(days=7)]
+        else:
+            raise Exception('dates_b extends more than a week beyond dates_a, resulting in an inability to pair. Please adjust dates_b accordingly or set realign=True to (experimentally) automatically correct.')
+    if dates_b[0] + pd.Timedelta(days=7) < dates_a[-1]:
+        if realign:
+            dates_b = dates_b[dates_b >= dates_a[0] - pd.Timedelta(days=7)]
+        else:
+            raise Exception('dates_b extends more than a week prior to dates_a, resulting in an inability to pair. Please adjust dates_b accordingly or set realign=True to (experimentally) automatically correct')
+    if dates_a[0] + pd.Timedelta(days=7) < dates_b[-1]:
+        if realign:
+            dates_a = dates_a[dates_a >= dates_b[0] - pd.Timedelta(days=7)]
+        else:
+            raise Exception('dates_a extends more than a week prior to dates_b, resulting in an inability to pair. Please adjust dates_a accordingly or set realign=True to (experimentally) automatically correct')
+
+    # now we need to iterate through and find which other dates are the closest
+    # and pair them
+    if method == 'last-b':
+        pair_dates = pd.DataFrame(pd.Series(dates_b, name=dates_b_name))
+        # add the column for dates_a dates
+        pair_dates[dates_a_name] = np.nan * np.zeros(len(pair_dates[dates_b_name]))
+
+        i = 0
+        for date in dates_a:
+            if date >= dates_b[i]:
+                while i < len(dates_b)-1 and dates_b[i+1] <= date:
+                    i += 1
+                if not isinstance(pair_dates[dates_a_name].iloc[i], pd.Timestamp):
+                    pair_dates[dates_a_name].iloc[i] = date
+    elif method == 'last-a':
+        pair_dates = pd.DataFrame(pd.Series(dates_a, name=dates_a_name))
+        # add the column for dates_b dates
+        pair_dates[dates_b_name] = np.nan * np.zeros(len(pair_dates[dates_a_name]))
+
+        i = 0
+        for date in dates_b:
+            if date >= dates_a[i]:
+                while i < len(dates_a)-1 and dates_a[i+1] <= date:
+                    i += 1
+                if not isinstance(pair_dates[dates_b_name].iloc[i], pd.Timestamp):
+                    pair_dates[dates_b_name].iloc[i] = date
+    elif method == 'nearest':
+        i = 0
+        j = 0
+        pairs = []
+
+        # go through and match each date in A with the nearest date in B
+        while i < len(dates_a) and j < len(dates_b):
+            current_difference = np.abs(dates_a[i] - dates_b[j])
+
+            # if we've gotten to the end of the list, match with
+            # it and reset our search
+            if j+1 == len(dates_b):
+                pairs.append((dates_a[i], dates_b[j]))
+                i += 1
+                j = 0
+            # if there is an exact match or the found date is closer
+            # than the following, consider it a match
+            elif current_difference == pd.Timedelta('0 day') or current_difference < np.abs(dates_a[i] - dates_b[j+1]):
+                pairs.append((dates_a[i], dates_b[j]))
+                i += 1
+            # keep looking
+            else:
+                j += 1
+
+        # now need to trim duplicate pairings
+
+        paired_b = np.array(pairs)[:, 1]
+        remove_pairs = []
+
+        for date in dates_b:
+            found_pairs = np.where(date == paired_b)[0]
+            # check if found more than one pairing
+            if len(found_pairs > 1):
+                # gather differences
+                deltas = []
+                for duplicate in found_pairs:
+                    pairing = pairs[duplicate]
+                    deltas.append(np.abs(pairing[0] - pairing[1]))
+                # find closest
+                minimum_index = np.argmin(np.array(deltas))
+                minimum_pairing = pairs[found_pairs[minimum_index]]
+            # collect which pairs to remove (removing now would mess
+            # with the ordering of things)
+            for duplicate in found_pairs:
+                pairing = pairs[duplicate]
+                if pairing != minimum_pairing:
+                    remove_pairs.append(pairing)
+        # finally remove unfavorable duplicates
+        for pair in remove_pairs:
+            pairs.remove(pair)
+            
+        pair_dates = pd.DataFrame(data=np.array(pairs), columns=[dates_a_name, dates_b_name])
+            
+    #elif method == 'cluster-a':
+    #elif method == 'cluster-b':
+    #elif method == 'cluster-nearest':
+    else:
+        raise Exception(f'{method} is not a supported method. Please visit the documentation for supported methods.')
+
+    # now drop the dates that did not get chosen
+    pair_dates = pair_dates.dropna('index')
+    # reset the index
+    pair_dates = pair_dates.reset_index()
+    # and make sure to drop pandas trying to preserve the old index
+    pair_dates = pair_dates.drop(columns='index')
+
+    return pair_dates
+
