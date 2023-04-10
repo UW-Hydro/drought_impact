@@ -179,13 +179,13 @@ if __name__ == "__main__":
         'spi':spi,
     }
 
-    area_threshold = [2000, 1000]
-    #area_threshold = [200, 100]
+    #area_threshold = [2000, 1000]
+    area_threshold = [200, 100]
     #area_threshold = [20, 10]
     ratio_thresh = 0.2
-    d_thresh = 1
+    d_thresh = 2
 
-    exp_tag = 'fe3_d1_rt20p_paired'
+    exp_tag = 'fe2_d2_rt20p_paired'
     # feX = filtered area 10eX scale
     # DX = drought threshold X
     # rtXXp = ratio threshold XX percent

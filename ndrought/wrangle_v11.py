@@ -1048,6 +1048,13 @@ def create_area_filter(s_tracks, like_terminations):
 
     return termination_filter
 
+def filter_track(tracks, track_filter):
+    filtered_tracks = []    
+    for i, track in enumerate(tracks):
+        if not i in track_filter:
+            filtered_tracks.append(track)
+    return filtered_tracks
+
 def prune_tracks(dtd):
     x_tracks = dtd['x']
     y_tracks = dtd['y']

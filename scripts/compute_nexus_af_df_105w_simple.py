@@ -25,11 +25,12 @@ print('... USDM loaded')
 intervals = ['30d', '180d']
 spi = xr.open_dataset(f'{dm_path}/spi/CONUS_105W/spi_usdmcat_CONUS_105W.nc')
 print('... SPI loaded')
+usdm_spi = xr.open_dataset(f'{dm_path}/ndrought_products/CONUS_105W/paired_ds/usdm_spi_paired.nc')
 
 # pair dates
 print ('Pairing Dates ...')
 usdm_dates = pd.to_datetime(usdm.time.values)
-spi_dates = pd.to_datetime(spi.time.values)
+spi_dates = pd.to_datetime(usdm_spi['SPI Date'].values)
 
 all_dates = [usdm_dates, spi_dates, ]
 dm_vars = ['usdm', 'spi', ]
