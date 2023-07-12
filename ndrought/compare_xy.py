@@ -12,6 +12,28 @@ intervals = ['14d', '30d', '90d', '180d', '270d', '1y', '2y', '5y', ]
 grace_vars = ['gws', 'rtzsm', 'sfsm']
 
 def sel_time_and_set_crs(ds, var, dates, crs='EPSG:5070'):
+    """Selects times and sets the CRS.
+
+    Parameters
+    ----------
+    ds: xr.Dataset
+        Expects time dimension named "time"
+    var: str
+        Variable within ds that want to access. Expecting
+        'usdm', 'pdsi', 'grace', or a variable in the format
+        of 'var_interval' for the intervals 14d, 30d, 90d,
+        180d, 270d, 1y, 2y, and 5y.
+    dates: hashable
+        Dates to select 
+    crs: str
+        CRS to set. Does not transform, should be what the
+        dataset is already in.
+
+    Returns
+    -------
+    list
+        DataArrays selected for dates with crs written.
+    """
     
     if var in 'usdm':
         da_list = [ds['USDM'].sel(time=dates).rio.write_crs(crs, inplace=True)]
@@ -25,6 +47,27 @@ def sel_time_and_set_crs(ds, var, dates, crs='EPSG:5070'):
     return da_list
 
 def create_paired_ds(da_a:list, da_b:list, dates_a:pd.DataFrame, dates_b:pd.DataFrame, rescale=False):
+    """Spatial pairing of data.
+
+    Parameters
+    ----------
+    da_a: List[xarray.DataArray]
+    da_b: List[xarray.DataArray]
+    dates_a: pd.DataFrame
+        Must have the same index as dates_b
+    dates_b: pd.DataFrame
+        Must have the same index as dates_a
+    rescale: boolean
+        Whether to use reproject_match to rescale one
+        metric to the other, always coarsening. Defaults
+        as False.
+    
+    Returns
+    -------
+    xarray.Dataset
+        Paired Dataset using time indices where dates
+        are stored as variables.
+    """
     y_a = da_a[0].y
     y_b = da_b[0].y
     x_a = da_a[0].x
@@ -155,6 +198,22 @@ def lag_nan_corrcoef(x:xr.DataArray, y:xr.DataArray, lag:int, lag_step=1):
     return np.arange(-1*lag, lag+1, 1), np.hstack(r_array)
 
 def compute_r_pixel(args):
+        """Computes r coefficient for a pixel
+
+        Plugged into lag_nan_corrcoef
+
+        Parameters
+        ----------
+        args
+            pixel_x, pixel_y, lag. The pixel in the first
+            metric, the pixel in the second metric, and
+            the lag to apply, respectively. 
+
+        Returns
+        -------
+        r_pixel
+            From lag_nan_corrcoef.
+        """
    
         # unpack our wrapped arguments
         pixel_x, pixel_y, lag = args
@@ -164,6 +223,23 @@ def compute_r_pixel(args):
         return r_pixel
 
 def compute_r_multi_mp(ds:xr.Dataset, pool:mp.Pool, x_vars=list, y_vars=list, lag=20, floor=-1):
+    """Computes r coefficients using multiprocessing.
+
+    Parameters
+    ----------
+    ds: xr.Dataset
+    pool: mp.Pool
+    x_vars: list
+        Variables in ds to use as first metric in computation.
+    y_vars: list
+        Variables in dds to use as second metric in computation.
+    lag: int
+        Lag to apply, defaults to 20 for 20 time steps.
+    floor: int
+        Lowest possible meaningful value. Values below the floor
+        are set to np.nan. Defaults to -1.
+    
+    """
 
     result_ds = xr.Dataset(
         coords=dict(

@@ -47,6 +47,7 @@ def collect_drought_track(args):
     alpha_list = []
     s_list = []
     sf_list = []
+    id_list = []
 
     (origin, net_adj_dict, net_centroids, s_thresh, ratio_thresh, cmap) = args
 
@@ -80,13 +81,14 @@ def collect_drought_track(args):
                         alpha_list.append(np.min((s_f/s, s/s_f)))
                         s_list.append(s)
                         sf_list.append(s_f)
+                        id_list.append(current_id)
 
     if len(t_list) > 0:
         t_min = np.min(t_list)
         t_max = np.max(t_list)
         color_list = [cmap(np.round((t-t_min)/(t_max-t_min), 4))[:-1] for t in t_list]
 
-    return x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list
+    return x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list, id_list
 
 def extract_drought_tracks(net, coord_meta, client, cmap=plt.cm.get_cmap('viridis'), s_thresh=0, ratio_thresh=0):
 
@@ -101,6 +103,7 @@ def extract_drought_tracks(net, coord_meta, client, cmap=plt.cm.get_cmap('viridi
     alpha_tracks = []
     s_tracks = []
     sf_tracks = []
+    id_tracks = []
 
     valid_origins = []
     for origin in tqdm(net.origins, desc='Collecting Valid Origins'):
@@ -135,7 +138,7 @@ def extract_drought_tracks(net, coord_meta, client, cmap=plt.cm.get_cmap('viridi
         print(f'>>>>>>>>>> LOST {len(valid_origins) - len(results)} TRACKS <<<<<<<<<<<')
         
     for result in tqdm(results, desc='Reshaping and Packaging'):
-        x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list = result
+        x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list, id_list = result
 
         x_tracks.append(x_list)
         y_tracks.append(y_list)
@@ -146,9 +149,10 @@ def extract_drought_tracks(net, coord_meta, client, cmap=plt.cm.get_cmap('viridi
         alpha_tracks.append(alpha_list)
         s_tracks.append(s_list)
         sf_tracks.append(sf_list)
+        id_tracks.append(id_list)
 
 
-    return x_tracks, y_tracks, u_tracks, v_tracks, t_tracks, color_tracks, alpha_tracks, s_tracks, sf_tracks
+    return x_tracks, y_tracks, u_tracks, v_tracks, t_tracks, color_tracks, alpha_tracks, s_tracks, sf_tracks, id_tracks
 
 if __name__ == "__main__":
 
@@ -180,12 +184,12 @@ if __name__ == "__main__":
     }
 
     #area_threshold = [2000, 1000]
-    area_threshold = [200, 100]
+    area_threshold = [1381, 1381]
     #area_threshold = [20, 10]
     ratio_thresh = 0.2
-    d_thresh = 2
+    d_thresh = 3
 
-    exp_tag = 'fe2_d2_rt20p_paired'
+    exp_tag = 'f25k_d3_rt20p_paired'
     # feX = filtered area 10eX scale
     # DX = drought threshold X
     # rtXXp = ratio threshold XX percent

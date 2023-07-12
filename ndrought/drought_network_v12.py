@@ -2,7 +2,7 @@ from multiprocessing import Event
 import networkx as nx
 import numpy as np
 import matplotlib as mpl
-import ndrought.wrangle as wrangle
+import ndrought.wrangle_v11 as wrangle
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
 import pickle
@@ -481,7 +481,7 @@ class DroughtNetwork:
         return time, vals
 
     def stacked_events_plot(self, id=None, start_time=None, end_time=None, 
-    ax=None, plot_legend=False, cmap=plt.cm.get_cmap('hsv'), **kwargs):
+    ax=None, plot_legend=False, cmap=plt.cm.get_cmap('hsv'), times=None, area_scalar=1, **kwargs):
         """Generates a stacked plot of droughts.
         
         Parameters
@@ -518,6 +518,7 @@ class DroughtNetwork:
         found_start_time = nodes[0].time
         found_end_time = nodes[-1].time
 
+    
         time = np.arange(found_start_time, found_end_time+1, 1)
         template = np.zeros(len(time))
         groupings = dict()
@@ -526,7 +527,7 @@ class DroughtNetwork:
             if node.group_id not in groupings.keys():
                 groupings[node.group_id] = template.copy()
 
-            groupings[node.group_id][time == node.time] += node.area
+            groupings[node.group_id][time == node.time] += node.area*area_scalar
 
         grouped_events = [groupings[key] for key in groupings.keys()]
         color_array = np.linspace(0, 1, len(grouped_events))
@@ -536,8 +537,11 @@ class DroughtNetwork:
         if ax is None:
             __, ax = plt.subplots()
 
+        if times is None:
+            times = time
+
         ax.stackplot(
-            time,
+            times,
             *grouped_events,
             labels=[f'{key}' for key in groupings.keys()],
             colors=colors,
@@ -939,6 +943,16 @@ class DroughtNetwork:
         return overlap_events        
     
     def area_thresh_removal(self, thresh:int):
+        """Removes nodes based on an area threshold.
+
+        Parameters
+        ----------
+        thresh: int
+            If a node's area is less than or equal
+            to this value, it is removed from the
+            DroughtNetwork
+        
+        """
         to_remove = []
         for node in tqdm(self.nodes, desc='Searching'):
             if node.area <= thresh:
@@ -954,6 +968,17 @@ class DroughtNetwork:
                 self.origins.remove(node)
 
     def area_thresh_splice(self, thresh):
+        """Cuts off nodes less than a certain ratio.
+
+        Parameters
+        ----------
+        thresh: float
+            If a future node's area is less than or
+            equal to the current node's area times
+            this thresh value, it is removed from the
+            network.
+        
+        """
         t = tqdm(total=len(self.nodes))
         for node in self.nodes:
             t.set_description('Searching')
@@ -969,9 +994,89 @@ class DroughtNetwork:
                 if len(splice_node.past) == 0:
                     self.origins.append(splice_node)
             t.update()
+
+    def find_origins(self, start_id):
+        start_node = self.nodes[start_id]
+        node_ids_to_search = [node.id for node in start_node.past]
+
+        origin_ids = []
+        while len(node_ids_to_search) > 0:
+            search_id = node_ids_to_search.pop(0)
+            search_node = self.nodes[search_id]
+            if len(search_node.past) > 0:
+                for node in search_node.past:
+                    node_ids_to_search.append(node.id)
+            elif not search_id in origin_ids:
+                origin_ids.append(search_id)
+
+        return origin_ids
+    
+    def collect_origin_paths(self, start_id):
+        start_node = self.nodes[start_id]
+        node_ids_to_search = [node.id for node in start_node.past]
+
+        all_ids = []
+        while len(node_ids_to_search) > 0:
+            search_id = node_ids_to_search.pop(0)
+            search_node = self.nodes[search_id]
+            if len(search_node.past) > 0:
+                for node in search_node.past:
+                    node_ids_to_search.append(node.id)
+            
+            if not search_id in all_ids:
+                all_ids.append(search_id)
+            
+
+        return all_ids
+
+    def get_full_thread(net, nodes):
+        origin_paths = []
+        for trace in nodes:
+            op = [net.nodes[id] for id in net.collect_origin_paths(start_id=trace.id)]
+            origin_paths.extend(op)
+
+        future_paths = []
+        for trace in nodes:
+            fp = net.get_chronological_future_thread(id=trace.id)
+            future_paths.extend(fp)
+        total_paths = origin_paths.copy()
+        total_paths.extend(future_paths)
+
+        pruned = []
+        ids_found = []
+        for node in total_paths:
+            if node.id not in ids_found:
+                pruned.append(node)
+                ids_found.append(node.id)
+
+        return pruned
+    
+    def node_array(self, nodes, start_time, end_time):
+        array_out = np.zeros(((end_time-start_time)+1, self.data.shape[1], self.data.shape[2]))
+
+        for node in nodes:
+            if node.time <= end_time and node.time >= start_time:
+                t = node.time - start_time
+                for [i, j] in node.coords:
+                    array_out[t, i, j] += 1
+        
+        return array_out
         
 def compute_alignment_fraction(overlap_events):
+    """Computes the alignment fraction, AF.
 
+    Parameters
+    ----------
+    overlap_events
+        Output from find_overlapping_nodes_events.
+    
+    Returns
+    -------
+    list[dict]
+        Elements within the list are threads, dictionaries
+        that map DroughtNetwork time to respective AF values.
+    
+    """
     net_af = []
 
     for thread in overlap_events:
@@ -998,6 +1103,19 @@ def compute_alignment_fraction(overlap_events):
     return net_af
 
 def compute_total_alignment_fraction(overlap_events):
+    """Computes total AF.
+
+    Parameters
+    ----------
+    overlap_events
+        Output from find_overlapping_nodes_events.
+
+    Returns
+    -------
+    float
+        A singular AF value, summed across the entire
+        network.
+    """
 
     intersect_total = 0
     union_total = 0
@@ -1022,8 +1140,60 @@ def compute_total_alignment_fraction(overlap_events):
     
     return intersect_total/union_total
 
-def compute_disagreement_fraction(a_net, b_net, overlap_events):
+def compute_alignment_area(overlap_events):
+    """Computes the alignment fraction, AA.
 
+    Parameters
+    ----------
+    overlap_events
+        Output from find_overlapping_nodes_events.
+    
+    Returns
+    -------
+    list[dict]
+        Elements within the list are threads, dictionaries
+        that map DroughtNetwork time to respective AA values.
+    
+    """
+    net_aa = []
+
+    for thread in overlap_events:
+        thread_aa = dict()
+
+        for event in thread:
+            time = list(event.keys())[0]
+
+            event_a = np.array(event[time])[:, 0]
+            coords_a = np.vstack([node.coords for node in event_a])
+            coord_set_a = set(tuple(coord) for coord in coords_a)
+
+            event_b = np.array(event[time])[:, 1]
+            coords_b = np.vstack([node.coords for node in event_b])
+            coord_set_b = set(tuple(coord) for coord in coords_b)
+
+            coord_set_intersect = coord_set_a.intersection(coord_set_b)
+
+            thread_aa[time] = len(coord_set_intersect)
+    
+        net_aa.append(thread_aa)
+
+    return net_aa
+
+def compute_disagreement_fraction(a_net, b_net, overlap_events):
+    """
+    
+    Parameters
+    ----------
+    a_net: DroughtNetwork
+    b_net: DroughtNetwork
+    overlap_events
+        Output from find_overlapping_nodes_events.
+    
+    Returns
+    -------
+    dict, dict
+    
+    """
     a_overlapped = dict()
     b_overlapped = dict()
     times = []
@@ -1197,5 +1367,170 @@ def compute_total_disagreement_fraction(a_net, b_net, overlap_events):
 
     return a_not_overlapped_total/a_area_total, b_not_overlapped_total/b_area_total
 
+def compute_disagreement_area(a_net, b_net, overlap_events):
+    """
+    
+    Parameters
+    ----------
+    a_net: DroughtNetwork
+    b_net: DroughtNetwork
+    overlap_events
+        Output from find_overlapping_nodes_events.
+    
+    Returns
+    -------
+    dict, dict
+    
+    """
+    a_overlapped = dict()
+    b_overlapped = dict()
+    times = []
+
+    for thread in overlap_events:
+        for event in thread: 
+            time = list(event.keys())[0]
+
+            if not time in a_overlapped.keys():
+                a_overlapped[time] = []
+            if not time in b_overlapped.keys():
+                b_overlapped[time] = []
+
+            event_a = np.array(event[time])[:, 0]
+            event_b = np.array(event[time])[:, 1]
+            times.append(time)
+
+            a_overlapped[time].extend(np.hstack(event_a))
+            b_overlapped[time].extend(np.hstack(event_b))
+
+    a_nodes = dict()
+    b_nodes = dict()
+
+    a_not_overlapped = dict()
+    b_not_overlapped = dict()
+
+    for node in a_net.nodes:
+        time = node.time
+        
+        if not time in a_nodes.keys():
+            a_nodes[time] = []
+        a_nodes[time].append(node)
+
+        if not time in a_overlapped.keys() or not node in a_overlapped[time]:
+            if time not in a_not_overlapped.keys():
+                a_not_overlapped[time] = []
+            a_not_overlapped[time].append(node)
+
+    for node in b_net.nodes:
+        time = node.time
+
+        if not time in b_nodes.keys():
+            b_nodes[time] = []
+        b_nodes[time].append(node)
+
+        if not time in b_overlapped.keys() or not node in b_overlapped[time]:
+            if time not in b_not_overlapped.keys():
+                b_not_overlapped[time] = []
+            b_not_overlapped[time].append(node)
+
+    a_df = dict()
+    b_df = dict()
+
+    for time in a_not_overlapped.keys():
+        all_nodes = a_nodes[time]
+        not_overlapped_nodes = a_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        a_df[time] = not_overlapped_area
+
+    for time in b_not_overlapped.keys():
+        all_nodes = b_nodes[time]
+        not_overlapped_nodes = b_not_overlapped[time]
+
+        total_area = 0
+        not_overlapped_area = 0
+
+        for node in not_overlapped_nodes:
+            not_overlapped_area += len(node.coords)
+        for node in all_nodes:
+            total_area += len(node.coords)
+
+        b_df[time] = not_overlapped_area
+
+    return a_df, b_df
+
+def overlap_nodes(nodes_a, nodes_b):
+        """Find overlapping nodes with another DroughtNetwork.
+
+        Parameters
+        ----------
+        b: DroughtNetwork
+        matched_dates_dict_idx: dict
+            Map going from the time indices in a DroughtNetwork as
+            keys and b DroughtNetwork as values.
+        
+        Returns
+        -------
+        list[dict]
+            List of event threads that overlap between a and b,
+            where each element in the list is a dictionary mapping
+            what nodes are overlapping between the two DroughtNetworks
+            with the times of a as keys.
+
+            [[{a.time:[[a_overlapping_node, b_overlapping_node], ...]}], ...]
+
+        """
+
+        overlapped_nodes = dict()
+
+        for node_a in tqdm(nodes_a):
+            # first need to see if the node's time is a matched time
+            time_idx = node_a.time
+            # will be testing overlap via set intersection
+            node_a_coord_set = set(tuple(coord) for coord in node_a.coords)
+            for node_b in nodes_b:
+                # if it's a temporal match
+                if time_idx == node_b.time:
+                    # then we'll carry through testing for spatial intersection
+                    node_b_coord_set = set(tuple(coord) for coord in node_b.coords)                        
+                    if len(node_a_coord_set.intersection(node_b_coord_set)) > 0:
+                        if time_idx not in overlapped_nodes.keys():
+                            overlapped_nodes[time_idx] = []
+                        overlapped_nodes[time_idx].append([node_a, node_b])
+
+        overlap_events = []
+
+        # okay, now to figure out which are the temporally consecutive
+        # events to have delineations between overlaps
+        current_event = []
+        for idx in overlapped_nodes.keys():
+            # if we currently aren't constructing an event,
+            # then we must be starting from scratch and will
+            # just toss it on to get started
+            if len(current_event) == 0:
+                current_event.append({idx:overlapped_nodes[idx]})
+            # now we want to see if they're consecutive
+            elif list(current_event[-1].keys())[0] == idx -1:
+                current_event.append({idx:overlapped_nodes[idx]})
+            # if they aren't consecutive, then we need to
+            # store the current event we were working on
+            # and start from scratch
+            else:
+                overlap_events.append(current_event)
+                current_event = [{idx:overlapped_nodes[idx]}]
+        
+        # lastly, if the final time is consecutive, then we
+        # won't end up storing in our events, so we should
+        # check whether it got stored and store it if not
+        if len(current_event) != 0 and overlap_events[-1] != current_event:
+            overlap_events.append(current_event)
 
 
+        return overlap_events
+        

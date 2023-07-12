@@ -899,7 +899,7 @@ def convert_pickle_to_dtd(path):
         dt = unpickler.load()
 
     dtd = dict()
-    vars = ['x', 'y', 'u', 'v', 't', 'c', 'a', 's', 'sf']
+    vars = ['x', 'y', 'u', 'v', 't', 'c', 'a', 's', 'sf', 'id']
 
     for tracks, var in zip(dt, vars):
         var_tracks = []
