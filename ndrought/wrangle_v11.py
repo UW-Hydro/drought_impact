@@ -968,7 +968,8 @@ def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60
 
     #return summary_df
 
-    return summary_df, summary_df.groupby(pd.cut(summary_df.lifetime, bins=bins)).agg(['mean', 'median', 'max', 'min', 'std', 'count'])
+    return summary_df, summary_df.groupby(pd.cut(summary_df.lifetime, bins=bins))#.agg(['mean', 'median', 'max', 'min', 'std', 'count'])
+    # for some reason agg is only working on a single column now
 
 def transform_points(x, y, inproj=pyproj.CRS('epsg:5070'), outproj=pyproj.CRS('epsg:4326')):
     """Transforms points using pyproj
