@@ -495,6 +495,25 @@ def compute_r_multi_mp(ds:xr.Dataset, pool:mp.Pool, x_vars=list, y_vars=list, la
 
 
 def create_paired_ds(da_a:list, da_b:list, dates_a:pd.DataFrame, dates_b:pd.DataFrame, rescale=False):
+    """Create a paired dataset.
+
+    Parameters
+    ----------
+    da_a, da_b: List[xr.DataArray]
+        DataArrays to be paired with each other, assumes lat and lon to be
+        matched in each respective set.
+    dates_a, dates_b: pd.DataFrame
+        Dates matching lists a and b.
+    rescale: boolean
+        Whether or not to rescale a and b to each other using rio.reproject_match.
+
+    Returns
+    -------
+    Dataset
+        a and b paired together temporally.
+    
+    """
+    
     lat_a = da_a[0].lat
     lat_b = da_b[0].lat
     lon_a = da_a[0].lon

@@ -10,11 +10,14 @@ Author: a. stein
 import xarray as xr
 import pandas as pd
 import numpy as np
+import yaml
 import rioxarray
 from shapely.geometry import mapping
 import geopandas as gpd
 import matplotlib as plt
 from tqdm.autonotebook import tqdm
+
+import ndrought.drought_network_v12 as dnet
 
 import pickle
 
@@ -25,6 +28,11 @@ from skimage.measure import regionprops_table
 
 import pyproj
 
+import os
+
+import dask
+from queue import Queue
+import gc
 
 
 def cunnane_empircal_cdf(data):
@@ -893,7 +901,33 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
     return ax
 
 def convert_pickle_to_dtd(path):
-    """convert drought tracks pickled to drought track dict"""
+    """convert drought tracks pickled to drought track dictionary
+
+    Converts a pickled drought track object to a
+    drought track dictionary, or dtd for short. This
+    dictionary contains the x,y coordinates of blobs,
+    u,v vectors between a current and future blob, 
+    time components, color based on relative time 
+    (e.g. how far along into the lifetime of the track
+    is each blob), similarity, size of current blob,
+    size of future blob, and the id of each blob from
+    the drought network the tracks were extracted from.
+    
+    Parameters
+    ----------
+    path: str
+        Location of drought track pickle.
+
+    Returns
+    -------
+    dict
+        drought track dictionary with keys x, y, u,
+        v, t, c, a, s, sf, and id, respective to
+        each feature described in the function 
+        description.
+
+
+    """
     with open(path, 'rb') as f:
         unpickler = pickle.Unpickler(f)
         dt = unpickler.load()
@@ -910,6 +944,20 @@ def convert_pickle_to_dtd(path):
     return dtd
 
 def compute_track_lifetime(t_track, to_days):
+    """Comuputes track lifetime.
+
+    Parameters
+    ----------
+    t_track: list
+        Temporal track from a dtd.
+    to_days: int or float
+        Number of days per time step.
+    
+    Returns
+    -------
+    lifetime: int or float
+        Total track lifetime.    
+    """
     track_lifetime = []
 
     for times in t_track:
@@ -918,15 +966,45 @@ def compute_track_lifetime(t_track, to_days):
     return track_lifetime
 
 def compute_distance(u,v):
+    """Computes distance using pythagorean theorem.
+
+    Parameters
+    ----------
+    u: float
+        Horizontal displacement.
+    v: float
+        Vertical displacement.
+    
+    Returns
+    -------
+    float
+        Total distance.
+    
+    """
     return np.sqrt(np.power(u, 2)+np.power(v, 2))
 
 def compute_track_distance(u_track, v_track):
+    """Computes distance over a track.
+
+    Parameters
+    ----------
+    u_track: list
+        Horizontal displacements as a track.
+    v_track: list
+        Vertical displacements as a track.
+    
+    Returns
+    -------
+    list
+        Distance traveled each step of the track.
+    """
     distance = []
     for u, v in zip(u_track, v_track):
         distance.append(compute_distance(u,v).sum())
     return distance
 
 def compute_track_displacement(x_track, y_track, u_track, v_track):
+     
     displacement = []
 
     for x, y, u, v in zip(x_track, y_track, u_track, v_track):
@@ -1177,6 +1255,106 @@ def extract_drought_tracks(net, coord_meta, client, log_dir, cmap=plt.cm.get_cma
 
 
     return x_tracks, y_tracks, u_tracks, v_tracks, t_tracks, color_tracks, alpha_tracks, s_tracks, sf_tracks
+
+def write_config(
+  config_path,
+  data_dir, dnet_dir, track_dir, log_dir,
+  metric_thresh, area_thresh, ratio_thresh      
+):
+    
+    if not isinstance(metric_thresh, str):
+        metric_thresh = f'{metric_thresh}'
+    if not isinstance(area_thresh, str):
+        area_thresh = f'{area_thresh}'
+    if not isinstance(ratio_thresh, str):
+        ratio_thresh = f'{ratio_thresh}'
+
+    config = {
+        "DIR":{
+            "DATA":data_dir,
+            "DNET":dnet_dir,
+            "TRACK": track_dir,
+            "LOG":log_dir,
+        },
+        "THRESH":{
+            "METRIC":metric_thresh,
+            "AREA":area_thresh,
+            "RATIO":ratio_thresh,
+        }
+    }
+
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+
+def read_yaml(file_path):
+    with open(file_path, "r") as f:
+        return yaml.safe_load(f)
+    
+def compute_drought_tracks(config_path, client, override=False):
+
+    config = read_yaml(config_path)
+    data_dir = config['DIR']['DATA']
+    dnet_dir = config['DIR']['DNET']
+    track_dir = config['DIR']['TRACK']
+    log_dir = config['DIR']['LOG']
+
+    metric_thresh = np.float64(config['THRESH']['METRIC'])
+    area_thresh = np.float64(config['THRESH']['AREA'])
+    ratio_thresh = np.float64(config['THRESH']['RATIO'])
+
+    # load in data
+    print('Lazy Data Load')
+    dm_path = '/pool0/home/steinadi/data/drought/drought_impact/data/drought_measures'
+
+    data = xr.open_dataarray(data_dir)
+    print('... Data ready')
+
+    # compute drought networks if not already made     
+
+    var_dnet = dnet.DroughtNetwork.unpickle(dnet_dir)          
+
+    # tossing in an override
+    if not os.path.exists(track_dir) or override:
+
+        try:
+            os.remove(track_dir)
+        except:
+            pass
+
+        print(f'Loading {data.name} ...')
+        data.load()
+        print(f'... Done')
+
+        x_coords = data.x.values
+        y_coords = data.y.values
+
+        coord_meta = (
+            np.min(y_coords), np.max(y_coords), len(y_coords),
+            np.min(x_coords), np.max(x_coords), len(x_coords)
+        )
+
+        var_tracks = extract_drought_tracks(
+            net=var_dnet,
+            coord_meta=coord_meta,
+            client=client,
+            log_dir=log_dir,
+            ratio_thresh=ratio_thresh
+        )
+
+        f = open(track_dir, 'wb')
+        pickle.dump(var_tracks, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+
+        x_coords = None
+        y_coords = None
+        coord_meta = None
+        var_tracks = None
+        f = None
+
+    var_dnet = None
+    del data
+
+    gc.collect()
 
 def filter_track(tracks, track_filter):
     filtered_tracks = []    
