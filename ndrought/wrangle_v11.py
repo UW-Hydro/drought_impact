@@ -1004,7 +1004,25 @@ def compute_track_distance(u_track, v_track):
     return distance
 
 def compute_track_displacement(x_track, y_track, u_track, v_track):
-     
+    """Compute track displacement.
+
+    Parameters
+    ----------
+    x_track: list
+        Horizontal coordinate positions.
+    y_track: list
+        Vetrical coordinate positions.
+    u_track: list
+        Horizontal displacments.
+    v_track: list
+        Vertical displacments
+    
+    Returns
+    -------
+    list
+        Displacements for corresponding elements.
+    
+    """
     displacement = []
 
     for x, y, u, v in zip(x_track, y_track, u_track, v_track):
@@ -1016,9 +1034,50 @@ def compute_track_displacement(x_track, y_track, u_track, v_track):
     return displacement
 
 def compute_track_similarity(a_track):
+    """Computes track similarity.
+
+    Parameters
+    ----------
+    a_track: list
+        Alpha values as created by 
+        extract_drought_tracks and 
+        compute_drought_tracks.
+    
+    Returns
+    -------
+    list
+        Similarity values at each element.
+    
+    """
     return [a.sum()/len(a) for a in a_track]
 
 def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60, 90, 180, 365, 730, 1825, 7*1163]):
+    """Summarizes track information.
+
+    Parameters
+    ----------
+    dtrack_dict: dict
+        Drought track dictionary, where the keys
+        x, y, u, v, t, and a that are horizontal
+        and veritcal coordinates, horizontal and
+        vertical displacements, time, and similarity,
+        respectively.
+    to_days: int
+        How many days each time step represents.
+    bins: list
+        Bins to group characterizations by. Defaults
+        as [0, 30, 60, 90, 180, 365, 730, 1825, 7*1163].
+    
+    Returns
+    -------
+    pd.DataFrame, pandas groupby object
+        Lifetime, distance, displacement, average
+        velocity, similarity, current blob size,
+        and future blob size included in a dataframe,
+        and then a second dataframe object grouped by
+        the bins ready for a summarizing function
+        to be called on it (e.g. mean, median).
+    """
     x_track = dtrack_dict['x']
     y_track = dtrack_dict['y']
     u_track = dtrack_dict['u']
@@ -1051,12 +1110,42 @@ def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60
 
 def transform_points(x, y, inproj=pyproj.CRS('epsg:5070'), outproj=pyproj.CRS('epsg:4326')):
     """Transforms points using pyproj
+
+    Parameters
+    ----------
+    x, y : float or array-like
+        Points to be transformed.
+    inproj
+        Input projection, defaults as 
+        pyproj.CRS('epsg:5070')
+    outproj
+        Output projection, defaults as
+        pyrpoj.CRS('epsg:4326)
+    Returns
+    -------
+    float or array-like
+        Coordinates transformed.
     """
     return pyproj.transform(inproj,outproj,x,y)
 
-
-
 def create_txy_points(x_tracks, y_tracks, t_tracks):
+    """Pairs t, x, and y coordinates together.
+
+    Parameters
+    ----------
+    x_tracks: list
+        Horizontal cooridnates.
+    y_tracks: list
+        Vertical coordinates.
+    t_tracks: list
+        Temporal coordinates.
+    
+    Returns
+    -------
+    list
+        Track as (t,x,y) for each element.
+    
+    """
     txy_tracks = dict()
     i = 0
     for x_track, y_track, t_track in zip(x_tracks, y_tracks, t_tracks):
@@ -1068,6 +1157,22 @@ def create_txy_points(x_tracks, y_tracks, t_tracks):
     return txy_tracks
 
 def find_like_terminations(txy_points):
+    """Finds tracks that share terminations.
+
+    Parameters
+    ----------
+    txy_points: list
+        Track where each element is (t, x, y)
+        for temporal, horizontal, and vertical
+        coordinates. This is created by 
+        create_txy_points.
+    
+    Returns
+    -------
+    list
+        Like termination points.
+    
+    """
     terminations = dict()
     for key in txy_points.keys():
         terminations[key] = txy_points[key][-1]
@@ -1086,7 +1191,19 @@ def find_like_terminations(txy_points):
     return like_terminations
 
 def create_area_filter(s_tracks, like_terminations):
+    """Creates a filter for pruning based on area.
 
+    Parameters
+    ----------
+    s_tracks: list
+        Area tracks for blobs.
+    like_terminations
+        Output of find_like_terminations
+    
+    Returns
+    -------
+        Termination filter
+    """
     sums = dict()
     i = 0
     for s_track in s_tracks:
@@ -1128,14 +1245,58 @@ def create_area_filter(s_tracks, like_terminations):
     return termination_filter
 
 def to_y(y, y_meta):
+    """Converts index space to y coordinates.
+
+    Parameters
+    ----------
+    y: float or array-like
+        Vertical coordinates in index space.
+    y_meta: tuple
+        Expects (y_min, y_max, y_spacing)
+    
+    Returns
+    -------
+    float or array-like
+        Vertical coordinates in coordinate space.
+    """
     y_min, y_max, y_spacing = y_meta
     return ((y_min-y_max)/y_spacing)*(y)+y_max
 
 def to_x(x, x_meta):
+    """Converts index space to x coordinates.
+
+    Parameters
+    ----------
+    x: float or array-like
+        Horizontal coordinates in index space.
+    x_meta: tuple
+        Expects (x_min, x_max, x_spacing).
+
+    Returns
+    -------
+    float or array-like
+        Horizontal coordinates in coordinate space.
+    
+    """
     x_min, x_max, x_spacing = x_meta
     return ((x_max-x_min)/x_spacing)*(x)+x_min
 
 def to_xy(coord, coord_meta):
+    """Converst index space to x,y coordinates.
+
+    Parameters
+    ----------
+    coord
+        Expects (y, x) in index space.
+    coord_meta
+        Expects (y_min, y_max, y_spacing, x_min, 
+        x_max, x_spacing).
+    
+    Returns
+    -------
+    tuple
+        (x,y) in coordinate space.
+    """
     y_min, y_max, y_spacing, x_min, x_max, x_spacing = coord_meta
 
     y_meta = (y_min, y_max, y_spacing)
@@ -1145,6 +1306,27 @@ def to_xy(coord, coord_meta):
     return (to_x(x, x_meta), to_y(y, y_meta))
 
 def collect_drought_track(args):
+    """Collects drought tracks in parallel.
+
+    This function is meant to be used by extract_drought_tracks.
+
+    Parameters
+    ----------
+    args: wrapper
+        Expects the following to be wrapped up: (origin, drought
+        network adjacency dictionary, drought network centroids, 
+        area threshold, ratio threshold, colormap for temporal coloring).
+        Note that the drought network centroids should take the following
+        shape: dictionary mapping node id's to a tuple that contains node xy
+        coordinates, node time, and size of the node blob, in that order.
+    
+    Returns
+    -------
+    tuple
+        x coordinates, y coordinates, u vector, v vector, temporal
+        coordinates, temporal coloring, transparency based on similarity,
+        sizes of current drought blobs, sizes of future drought blobs.
+    """
     x_list = []
     y_list = []
     u_list = []
@@ -1196,6 +1378,38 @@ def collect_drought_track(args):
     return x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list
 
 def extract_drought_tracks(net, coord_meta, client, log_dir, cmap=plt.cm.get_cmap('viridis'), s_thresh=0, ratio_thresh=0):
+    """Extracts drought tracks using collect_drought_tracks.
+
+    Parent functin for collect_drought_tracks, running it in 
+    parallel according to the client given.
+
+    Parameters
+    ----------
+    net: DroughtNetwork
+        Drought network from which to extract tracks.
+    coord_meta: tuple
+        see to_xy
+    client
+        Dask client object. If not wanting to run in parallel,
+        then set workers and threads to 1.
+    log_dir: str
+        Path to write out error logs to.
+    cmap: matplotlib colormap
+        Colormap for temporal coloring. Defaults to viridis.
+    s_thresh: int
+        Area threshold, defaults as 0.
+    ratio_thresh: float
+        Ratio/continuation threshold, defaults as 0.
+
+    Returns
+    -------
+    tuple
+        x coordinate tracks, y coordinate tracks, u vector tracks,
+        v vector tracks, temporal coordinate tracks, temporal coloring
+        tracks, alpha similarity tracks, current blob size tracks, future
+        blob size tracks.
+    
+    """
 
     net_centroids = {node.id:(*to_xy(node.coords.mean(axis=0), coord_meta), node.time, len(node.coords)) for node in net.nodes}
 
@@ -1261,6 +1475,25 @@ def write_config(
   data_dir, dnet_dir, track_dir, log_dir,
   metric_thresh, area_thresh, ratio_thresh      
 ):
+    """Writes a configuration file for compute_drought_tracks.
+
+    Parameters
+    ----------
+    config_path: str
+        Location of this configuratoin file being made.
+    data_dir: str
+        Directory to data used to create drought network.
+    track_dir: str
+        Directory of tracks to be created.
+    log_dir: str
+        Location for error logs to be recorded.
+    metric_thresh: int
+        Drought threshold for creating drought network.
+    area_thresh: int
+        Area threshold for minimum drought blob size.
+    ratio_thresh: float
+        Ratio/continuation threshold for drought blob tracks.    
+    """
     
     if not isinstance(metric_thresh, str):
         metric_thresh = f'{metric_thresh}'
@@ -1287,10 +1520,40 @@ def write_config(
         yaml.dump(config, f)
 
 def read_yaml(file_path):
+    """Read a yaml file.
+
+    Parameters
+    ----------
+    file_path: str
+        Location of yaml file.
+    
+    Returns
+    -------
+    contents of yaml file.
+    
+    """
     with open(file_path, "r") as f:
         return yaml.safe_load(f)
     
 def compute_drought_tracks(config_path, client, override=False):
+    """Computes drought tracks from a network given configurations.
+
+    This is the parent function for extract_drought_tracks, and by
+    extension, collect_drought_tracks. It handles all of the nitty
+    gritty formating and computations for getting tracks.
+
+    Parameters
+    ----------
+    config_path: str
+        Location of the configuration file created by write_config.
+    client
+        Dask client for parallelism.
+    override: boolean
+        Whether to overwrite existing files, defaults False so that
+        the function will complete without any new changes if 
+        the track file named in configurations already exists.
+    
+    """
 
     config = read_yaml(config_path)
     data_dir = config['DIR']['DATA']
@@ -1357,6 +1620,21 @@ def compute_drought_tracks(config_path, client, override=False):
     gc.collect()
 
 def filter_track(tracks, track_filter):
+    """Filter out tracks based on filter.
+
+    Parameters
+    ----------
+    tracks: list
+        Tracks to filter out
+    track_filter
+        Which tracks to exclude.
+
+    Returns
+    -------
+    list
+        filtered tracks.
+    
+    """
     filtered_tracks = []    
     for i, track in enumerate(tracks):
         if not i in track_filter:
@@ -1364,6 +1642,23 @@ def filter_track(tracks, track_filter):
     return filtered_tracks
 
 def prune_tracks(dtd):
+    """Prunes tracks based on single-termination point requirement.
+
+    Parameters
+    ----------
+    dtd: dict
+        Drought track dictionary, expecting 'x' to have
+        horizontal coordinates, 'y' to have vertical coordinates,
+        't' to have temporal coordinates, and 's' to have the 
+        area of each drought blob. All other keys will also
+        be filtered.
+
+    Returns
+    -------
+    dict
+        Drought track dictionary filtered.
+    
+    """
     x_tracks = dtd['x']
     y_tracks = dtd['y']
     t_tracks = dtd['t']
