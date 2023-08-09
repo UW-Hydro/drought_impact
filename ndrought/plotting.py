@@ -238,6 +238,20 @@ def connect_overlap_nodes(G, overlap, name_a:str, name_b:str, inverse_edges=Fals
     return G
 
 def plot_stacked_caf(caf_ds, vars, fig=None, axs=None, show_cbar=False):
+    """Plot stacked category area fractions.
+
+    Parameters
+    ----------
+    caf_ds: xr.Dataset
+        Category area fraction dataset.
+    vars: list
+        Variable names to iterate through.
+    axs
+        Matplotlib axes, defaults as None and creates one.
+    show_cbar: boolean
+        Whether to plot colorbar, defaults as false.
+    
+    """
 
     cats = ['neutral_wet', 'D0', 'D1', 'D2', 'D3', 'D4']
     usdm_colors=["white","yellow","navajowhite","orange","crimson","darkred"]

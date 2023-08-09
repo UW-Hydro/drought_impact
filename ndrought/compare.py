@@ -441,16 +441,57 @@ def lag_nan_corrcoef(x:xr.DataArray, y:xr.DataArray, lag:int, lag_step=1):
 # generalize compute_r !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 def compute_r_pixel(args):
+    """Computes r correlation per pixel for parallelism.
+
+    Parameters
+    ----------
+    args
+        Expects pixel_x, pixel_y, lag, where pixel_x and
+        pixel_y are the two pixels to compute the r 
+        correlation between and lag is the lag imposed
+        between them.
+    
+    Returns
+    -------
+    float
+        r correlation for the pixels.
+    """
    
-        # unpack our wrapped arguments
-        pixel_x, pixel_y, lag = args
+    # unpack our wrapped arguments
+    pixel_x, pixel_y, lag = args
 
-        __, r_pixel = lag_nan_corrcoef(pixel_x, pixel_y, lag=lag)
+    __, r_pixel = lag_nan_corrcoef(pixel_x, pixel_y, lag=lag)
 
-        return r_pixel
+    return r_pixel
 
 def compute_r_multi_mp(ds:xr.Dataset, pool:mp.Pool, x_vars=list, y_vars=list, lag=20, floor=-1):
+    """Uses multiprocessing to compute multiple r correlations.
 
+    Parameters
+    ----------
+    ds: xr.Dataset
+        Contains all data for correlations. Expecting coordinates
+        lat and lon.
+    pool: mp.Pool
+        Multiprocessing pool object.
+    x_vars: list
+        First set of variables within ds to use in computation.
+        Is compared to y_vars.
+    y_vars: list
+        Second set of variables within ds to use in computation.
+        Is compared to x_vars.
+    lag: int
+        Total lag to impose in correlations, defaults to 20.
+    floor: int
+        Values to exclude from correlation calculation, 
+        defaults as -1 to not run neutral/wet correlations.
+    
+    Returns
+    -------
+    xr.Dataset
+        Correlations with coordinates lat, lon, and lag.
+    
+    """
     result_ds = xr.Dataset(
         coords=dict(
             lat=(["lat"], ds.lat.values),
