@@ -726,11 +726,31 @@ class DroughtNetwork:
         return color_map
 
     def pickle(self, path):
+        """Pickles the drought network.
+
+        Parameters
+        ----------
+        path: str
+            Where to save the pickle.
+
+        """
         f = open(path, 'wb')
         pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
     def unpickle(path):
+        """Unpickles a drought network.
+
+        Parameters
+        ----------
+        path: str
+            Location of drought network pickle.
+
+        Returns
+        -------
+        DroughtNetwork
+        
+        """
         with open(path, 'rb') as f:
             unpickler = pickle.Unpickler(f)
             return unpickler.load()
@@ -996,6 +1016,19 @@ class DroughtNetwork:
             t.update()
 
     def find_origins(self, start_id):
+        """Locates origins from a node.
+
+        Parameters
+        ----------
+        start_id: int
+            ID of node to start at.
+        
+        Returns
+        -------
+        list
+            ID's of origin nodes.
+        
+        """
         start_node = self.nodes[start_id]
         node_ids_to_search = [node.id for node in start_node.past]
 
@@ -1012,6 +1045,19 @@ class DroughtNetwork:
         return origin_ids
     
     def collect_origin_paths(self, start_id):
+        """Traces back to origin and collects all IDs along the way.
+
+        Parameters
+        ----------
+        start_id: int
+            ID of node to start from.
+        
+        Returns
+        -------
+        list
+            All ids on the path to the start_id's origin.
+        
+        """
         start_node = self.nodes[start_id]
         node_ids_to_search = [node.id for node in start_node.past]
 
@@ -1030,6 +1076,20 @@ class DroughtNetwork:
         return all_ids
 
     def get_full_thread(net, nodes):
+        """Traces from origin to termination.
+
+        Parameters
+        ----------
+        net: DroughtNetwork
+        nodes: list
+            Nodes to trace the thread from.
+
+        Returns
+        -------
+        list
+            Nodes that compose the full thread from 'nodes'. 
+        
+        """
         origin_paths = []
         for trace in nodes:
             op = [net.nodes[id] for id in net.collect_origin_paths(start_id=trace.id)]
@@ -1052,6 +1112,22 @@ class DroughtNetwork:
         return pruned
     
     def node_array(self, nodes, start_time, end_time):
+        """Creates a 3D array from nodes.
+
+        Parameters
+        ----------
+        nodes: list
+            Nodes to create array from.
+        start_time: int
+            Node start time.
+        end_time: int
+            Node end time.
+
+        Returns
+        -------
+        array
+
+        """
         array_out = np.zeros(((end_time-start_time)+1, self.data.shape[1], self.data.shape[2]))
 
         for node in nodes:
@@ -1180,7 +1256,7 @@ def compute_alignment_area(overlap_events):
     return net_aa
 
 def compute_disagreement_fraction(a_net, b_net, overlap_events):
-    """
+    """Computes disagreement fraction, DF.
     
     Parameters
     ----------
@@ -1278,6 +1354,20 @@ def compute_disagreement_fraction(a_net, b_net, overlap_events):
     return a_df, b_df
 
 def compute_total_disagreement_fraction(a_net, b_net, overlap_events):
+    """Computes total disagreement fraction, DF, across all the nodes.
+    
+    Parameters
+    ----------
+    a_net: DroughtNetwork
+    b_net: DroughtNetwork
+    overlap_events
+        Output from find_overlapping_nodes_events.
+    
+    Returns
+    -------
+    float, float
+    
+    """
 
     a_overlapped = dict()
     b_overlapped = dict()
@@ -1368,7 +1458,7 @@ def compute_total_disagreement_fraction(a_net, b_net, overlap_events):
     return a_not_overlapped_total/a_area_total, b_not_overlapped_total/b_area_total
 
 def compute_disagreement_area(a_net, b_net, overlap_events):
-    """
+    """Computes disagreement area, DA.
     
     Parameters
     ----------
