@@ -2,7 +2,7 @@
 
 This module contains various helper functions for accessing, converting, and manipulating data used in nDrought.
 
-Updated: 12.22.2021
+Updated: 3.31.2023
 Author: a. stein
 
 """
@@ -10,11 +10,14 @@ Author: a. stein
 import xarray as xr
 import pandas as pd
 import numpy as np
+import yaml
 import rioxarray
 from shapely.geometry import mapping
 import geopandas as gpd
 import matplotlib as plt
 from tqdm.autonotebook import tqdm
+
+import drought.drought_impact.ndrought.drought_network as dnet
 
 import pickle
 
@@ -22,6 +25,14 @@ import skimage
 
 from skimage.color import rgb2gray
 from skimage.measure import regionprops_table
+
+import pyproj
+
+import os
+
+import dask
+from queue import Queue
+import gc
 
 
 def cunnane_empircal_cdf(data):
@@ -890,13 +901,39 @@ def plot_drought_evolution(df:pd.DataFrame, event_id='', plot_var='area', ax=Non
     return ax
 
 def convert_pickle_to_dtd(path):
-    """convert drought tracks pickled to drought track dict"""
+    """convert drought tracks pickled to drought track dictionary
+
+    Converts a pickled drought track object to a
+    drought track dictionary, or dtd for short. This
+    dictionary contains the x,y coordinates of blobs,
+    u,v vectors between a current and future blob, 
+    time components, color based on relative time 
+    (e.g. how far along into the lifetime of the track
+    is each blob), similarity, size of current blob,
+    size of future blob, and the id of each blob from
+    the drought network the tracks were extracted from.
+    
+    Parameters
+    ----------
+    path: str
+        Location of drought track pickle.
+
+    Returns
+    -------
+    dict
+        drought track dictionary with keys x, y, u,
+        v, t, c, a, s, sf, and id, respective to
+        each feature described in the function 
+        description.
+
+
+    """
     with open(path, 'rb') as f:
         unpickler = pickle.Unpickler(f)
         dt = unpickler.load()
 
     dtd = dict()
-    vars = ['x', 'y', 'u', 'v', 't', 'c', 'a']
+    vars = ['x', 'y', 'u', 'v', 't', 'c', 'a', 's', 'sf', 'id']
 
     for tracks, var in zip(dt, vars):
         var_tracks = []
@@ -907,6 +944,20 @@ def convert_pickle_to_dtd(path):
     return dtd
 
 def compute_track_lifetime(t_track, to_days):
+    """Comuputes track lifetime.
+
+    Parameters
+    ----------
+    t_track: list
+        Temporal track from a dtd.
+    to_days: int or float
+        Number of days per time step.
+    
+    Returns
+    -------
+    lifetime: int or float
+        Total track lifetime.    
+    """
     track_lifetime = []
 
     for times in t_track:
@@ -915,15 +966,63 @@ def compute_track_lifetime(t_track, to_days):
     return track_lifetime
 
 def compute_distance(u,v):
+    """Computes distance using pythagorean theorem.
+
+    Parameters
+    ----------
+    u: float
+        Horizontal displacement.
+    v: float
+        Vertical displacement.
+    
+    Returns
+    -------
+    float
+        Total distance.
+    
+    """
     return np.sqrt(np.power(u, 2)+np.power(v, 2))
 
 def compute_track_distance(u_track, v_track):
+    """Computes distance over a track.
+
+    Parameters
+    ----------
+    u_track: list
+        Horizontal displacements as a track.
+    v_track: list
+        Vertical displacements as a track.
+    
+    Returns
+    -------
+    list
+        Distance traveled each step of the track.
+    """
     distance = []
     for u, v in zip(u_track, v_track):
         distance.append(compute_distance(u,v).sum())
     return distance
 
 def compute_track_displacement(x_track, y_track, u_track, v_track):
+    """Compute track displacement.
+
+    Parameters
+    ----------
+    x_track: list
+        Horizontal coordinate positions.
+    y_track: list
+        Vetrical coordinate positions.
+    u_track: list
+        Horizontal displacments.
+    v_track: list
+        Vertical displacments
+    
+    Returns
+    -------
+    list
+        Displacements for corresponding elements.
+    
+    """
     displacement = []
 
     for x, y, u, v in zip(x_track, y_track, u_track, v_track):
@@ -935,9 +1034,50 @@ def compute_track_displacement(x_track, y_track, u_track, v_track):
     return displacement
 
 def compute_track_similarity(a_track):
+    """Computes track similarity.
+
+    Parameters
+    ----------
+    a_track: list
+        Alpha values as created by 
+        extract_drought_tracks and 
+        compute_drought_tracks.
+    
+    Returns
+    -------
+    list
+        Similarity values at each element.
+    
+    """
     return [a.sum()/len(a) for a in a_track]
 
 def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60, 90, 180, 365, 730, 1825, 7*1163]):
+    """Summarizes track information.
+
+    Parameters
+    ----------
+    dtrack_dict: dict
+        Drought track dictionary, where the keys
+        x, y, u, v, t, and a that are horizontal
+        and veritcal coordinates, horizontal and
+        vertical displacements, time, and similarity,
+        respectively.
+    to_days: int
+        How many days each time step represents.
+    bins: list
+        Bins to group characterizations by. Defaults
+        as [0, 30, 60, 90, 180, 365, 730, 1825, 7*1163].
+    
+    Returns
+    -------
+    pd.DataFrame, pandas groupby object
+        Lifetime, distance, displacement, average
+        velocity, similarity, current blob size,
+        and future blob size included in a dataframe,
+        and then a second dataframe object grouped by
+        the bins ready for a summarizing function
+        to be called on it (e.g. mean, median).
+    """
     x_track = dtrack_dict['x']
     y_track = dtrack_dict['y']
     u_track = dtrack_dict['u']
@@ -957,6 +1097,676 @@ def compute_track_summary_characterization(dtrack_dict, to_days, bins=[0, 30, 60
     summary_df['average velocity'] = summary_df['distance']/summary_df['lifetime']
     summary_df['similarity'] = similarity
 
+    #try:
+    summary_df['xy_size'] = dtrack_dict['s']
+    summary_df['uv_size'] = dtrack_dict['sf']
+    #except Exception as e:
+    #    print(e)
+
     #return summary_df
 
-    return summary_df, summary_df.groupby(pd.cut(summary_df.lifetime, bins=bins)).agg(['mean', 'median', 'max', 'min', 'std', 'count'])
+    return summary_df, summary_df.groupby(pd.cut(summary_df.lifetime, bins=bins))#.agg(['mean', 'median', 'max', 'min', 'std', 'count'])
+    # for some reason agg is only working on a single column now
+
+def transform_points(x, y, inproj=pyproj.CRS('epsg:5070'), outproj=pyproj.CRS('epsg:4326')):
+    """Transforms points using pyproj
+
+    Parameters
+    ----------
+    x, y : float or array-like
+        Points to be transformed.
+    inproj
+        Input projection, defaults as 
+        pyproj.CRS('epsg:5070')
+    outproj
+        Output projection, defaults as
+        pyrpoj.CRS('epsg:4326)
+    Returns
+    -------
+    float or array-like
+        Coordinates transformed.
+    """
+    return pyproj.transform(inproj,outproj,x,y)
+
+def create_txy_points(x_tracks, y_tracks, t_tracks):
+    """Pairs t, x, and y coordinates together.
+
+    Parameters
+    ----------
+    x_tracks: list
+        Horizontal cooridnates.
+    y_tracks: list
+        Vertical coordinates.
+    t_tracks: list
+        Temporal coordinates.
+    
+    Returns
+    -------
+    list
+        Track as (t,x,y) for each element.
+    
+    """
+    txy_tracks = dict()
+    i = 0
+    for x_track, y_track, t_track in zip(x_tracks, y_tracks, t_tracks):
+        txy_track = []
+        for x, y, t in zip(x_track, y_track, t_track):
+            txy_track.append((t,x,y))
+        txy_tracks[i] = (txy_track)
+        i += 1
+    return txy_tracks
+
+def find_like_terminations(txy_points):
+    """Finds tracks that share terminations.
+
+    Parameters
+    ----------
+    txy_points: list
+        Track where each element is (t, x, y)
+        for temporal, horizontal, and vertical
+        coordinates. This is created by 
+        create_txy_points.
+    
+    Returns
+    -------
+    list
+        Like termination points.
+    
+    """
+    terminations = dict()
+    for key in txy_points.keys():
+        terminations[key] = txy_points[key][-1]
+    
+    like_terminations = []
+    for key_a in terminations.keys():
+        like_term = [key_a]
+        term_a = terminations[key_a]
+        for key_b in terminations.keys():
+            if key_a != key_b and term_a == terminations[key_b]:
+                like_term.append(key_b)
+
+        like_term = list(set(like_term))
+        if len(like_term) > 1 and not like_term in like_terminations:
+            like_terminations.append(like_term)
+    return like_terminations
+
+def create_area_filter(s_tracks, like_terminations):
+    """Creates a filter for pruning based on area.
+
+    Parameters
+    ----------
+    s_tracks: list
+        Area tracks for blobs.
+    like_terminations
+        Output of find_like_terminations
+    
+    Returns
+    -------
+        Termination filter
+    """
+    sums = dict()
+    i = 0
+    for s_track in s_tracks:
+        sums[i] = np.sum(s_track)
+        i += 1
+
+    select_tracks = []
+
+    for like_terms in like_terminations:
+        mat_size = len(like_terms)
+        s_mat = np.zeros((mat_size, mat_size))
+
+        for i, key_a in enumerate(like_terms):
+            sum_a = sums[key_a]
+            for j, key_b in enumerate(like_terms):
+                sum_b = sums[key_b]
+                s_mat[i, j] = sum_a-sum_b
+
+        s_mat >= 0
+
+        found_i = -1
+        found_track = -1
+
+        i=0
+        while found_i == -1 and i < s_mat.shape[0]:
+            if np.all(s_mat[i, :] >= 0):
+                found_i = i
+                found_track = like_terms[i]
+            i += 1
+
+        select_tracks.append(found_track)
+    
+    termination_filter = []
+
+    for term in np.hstack(like_terminations):
+        if not term in select_tracks:
+            termination_filter.append(term)
+
+    return termination_filter
+
+def to_y(y, y_meta):
+    """Converts index space to y coordinates.
+
+    Parameters
+    ----------
+    y: float or array-like
+        Vertical coordinates in index space.
+    y_meta: tuple
+        Expects (y_min, y_max, y_spacing)
+    
+    Returns
+    -------
+    float or array-like
+        Vertical coordinates in coordinate space.
+    """
+    y_min, y_max, y_spacing = y_meta
+    return ((y_min-y_max)/y_spacing)*(y)+y_max
+
+def to_x(x, x_meta):
+    """Converts index space to x coordinates.
+
+    Parameters
+    ----------
+    x: float or array-like
+        Horizontal coordinates in index space.
+    x_meta: tuple
+        Expects (x_min, x_max, x_spacing).
+
+    Returns
+    -------
+    float or array-like
+        Horizontal coordinates in coordinate space.
+    
+    """
+    x_min, x_max, x_spacing = x_meta
+    return ((x_max-x_min)/x_spacing)*(x)+x_min
+
+def to_xy(coord, coord_meta):
+    """Converst index space to x,y coordinates.
+
+    Parameters
+    ----------
+    coord
+        Expects (y, x) in index space.
+    coord_meta
+        Expects (y_min, y_max, y_spacing, x_min, 
+        x_max, x_spacing).
+    
+    Returns
+    -------
+    tuple
+        (x,y) in coordinate space.
+    """
+    y_min, y_max, y_spacing, x_min, x_max, x_spacing = coord_meta
+
+    y_meta = (y_min, y_max, y_spacing)
+    x_meta = (x_min, x_max, x_spacing)
+
+    y, x = coord
+    return (to_x(x, x_meta), to_y(y, y_meta))
+
+def collect_drought_track(args):
+    """Collects drought tracks in parallel.
+
+    This function is meant to be used by extract_drought_tracks.
+
+    Parameters
+    ----------
+    args: wrapper
+        Expects the following to be wrapped up: (origin, drought
+        network adjacency dictionary, drought network centroids, 
+        area threshold, ratio threshold, colormap for temporal coloring).
+        Note that the drought network centroids should take the following
+        shape: dictionary mapping node id's to a tuple that contains node xy
+        coordinates, node time, and size of the node blob, in that order.
+    
+    Returns
+    -------
+    tuple
+        x coordinates, y coordinates, u vector, v vector, temporal
+        coordinates, temporal coloring, transparency based on similarity,
+        sizes of current drought blobs, sizes of future drought blobs.
+    """
+    x_list = []
+    y_list = []
+    u_list = []
+    v_list = []
+    t_list = []
+    color_list = []
+    alpha_list = []
+    s_list = []
+    sf_list = []
+    id_list = []
+
+    (origin, net_adj_dict, net_centroids, s_thresh, ratio_thresh, cmap) = args
+
+    q = Queue()
+    q.put(origin.id)
+    thread_ids = [origin.id]
+
+    while not q.empty():
+        
+        current_id = q.get()
+
+        for future_id in net_adj_dict[current_id]:
+            if not future_id in thread_ids:
+                
+                        
+                x, y, t, s = net_centroids[current_id]
+                
+                if s > s_thresh:
+                    u, v, __, s_f = net_centroids[future_id]
+                    if s_f > ratio_thresh*s:
+                        
+                        q.put(future_id)
+                        thread_ids.append(future_id)
+
+                        x_list.append(x)
+                        y_list.append(y)
+                        u_list.append(u-x)
+                        v_list.append(v-y)
+                        t_list.append(t)
+
+                        alpha_list.append(np.min((s_f/s, s/s_f)))
+                        s_list.append(s)
+                        sf_list.append(s_f)
+                        
+                        id_list.append(current_id)
+
+    if len(t_list) > 0:
+        t_min = np.min(t_list)
+        t_max = np.max(t_list)
+        color_list = [cmap(np.round((t-t_min)/(t_max-t_min), 4))[:-1] for t in t_list]
+
+    return x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list, id_list
+
+def extract_drought_tracks(net, coord_meta, client, log_dir, cmap=plt.cm.get_cmap('viridis'), s_thresh=0, ratio_thresh=0):
+    """Extracts drought tracks using collect_drought_tracks.
+
+    Parent functin for collect_drought_tracks, running it in 
+    parallel according to the client given.
+
+    Parameters
+    ----------
+    net: DroughtNetwork
+        Drought network from which to extract tracks.
+    coord_meta: tuple
+        see to_xy
+    client
+        Dask client object. If not wanting to run in parallel,
+        then set workers and threads to 1.
+    log_dir: str
+        Path to write out error logs to.
+    cmap: matplotlib colormap
+        Colormap for temporal coloring. Defaults to viridis.
+    s_thresh: int
+        Area threshold, defaults as 0.
+    ratio_thresh: float
+        Ratio/continuation threshold, defaults as 0.
+
+    Returns
+    -------
+    tuple
+        x coordinate tracks, y coordinate tracks, u vector tracks,
+        v vector tracks, temporal coordinate tracks, temporal coloring
+        tracks, alpha similarity tracks, current blob size tracks, future
+        blob size tracks.
+    
+    """
+
+    net_centroids = {node.id:(*to_xy(node.coords.mean(axis=0), coord_meta), node.time, len(node.coords)) for node in net.nodes}
+
+    x_tracks = []
+    y_tracks = []
+    u_tracks = []
+    v_tracks = []
+    t_tracks = []
+    color_tracks = []
+    alpha_tracks = []
+    s_tracks = []
+    sf_tracks = []
+    id_tracks = []
+
+    valid_origins = []
+    for origin in tqdm(net.origins, desc='Collecting Valid Origins'):
+        # the ones that are one-off events I don't want to plot
+        if len(origin.future) > 0:           
+            valid_origins.append(origin)
+
+    print(f'{len(valid_origins)} Valid Origins Found')
+
+    values = [dask.delayed(collect_drought_track)((o, net.adj_dict, net_centroids, s_thresh, ratio_thresh, cmap)) for o in valid_origins]
+    persisted_values = dask.persist(*values)
+    for pv in tqdm(persisted_values):
+        try:
+            wait(pv)
+        except Exception:
+            pass
+    
+    print(f'Extracting Tracks from {net.name}')
+    futures = client.compute(persisted_values)
+
+    results = []
+    for o, future in zip(valid_origins, futures):
+        try:
+            results.append(future.result())
+        except Exception as e:
+            with open(f'{log_dir}/origin_error_{o.id}.log', 'w') as file:
+                file.write(f'{e}')
+                file.close()   
+     
+    if len(results) != len(valid_origins):
+        print(f'>>>>>>>>>> LOST {len(valid_origins) - len(results)} TRACKS <<<<<<<<<<<')
+        
+    for result in tqdm(results, desc='Reshaping and Packaging'):
+        x_list, y_list, u_list, v_list, t_list, color_list, alpha_list, s_list, sf_list, id_list = result
+
+        x_tracks.append(x_list)
+        y_tracks.append(y_list)
+        u_tracks.append(u_list)
+        v_tracks.append(v_list)
+        t_tracks.append(t_list)
+        color_tracks.append(color_list)
+        alpha_tracks.append(alpha_list)
+        s_tracks.append(s_list)
+        sf_tracks.append(sf_list)
+        id_tracks.append(id_list)
+
+
+    return x_tracks, y_tracks, u_tracks, v_tracks, t_tracks, color_tracks, alpha_tracks, s_tracks, sf_tracks, id_tracks
+
+def write_config(
+  config_path,
+  data_dir, dnet_dir, track_dir, log_dir,
+  metric_thresh, area_thresh, ratio_thresh      
+):
+    """Writes a configuration file for compute_drought_tracks.
+
+    Parameters
+    ----------
+    config_path: str
+        Location of this configuratoin file being made.
+    data_dir: str
+        Directory to data used to create drought network.
+    track_dir: str
+        Directory of tracks to be created.
+    log_dir: str
+        Location for error logs to be recorded.
+    metric_thresh: int
+        Drought threshold for creating drought network.
+    area_thresh: int
+        Area threshold for minimum drought blob size.
+    ratio_thresh: float
+        Ratio/continuation threshold for drought blob tracks.    
+    """
+    
+    if not isinstance(metric_thresh, str):
+        metric_thresh = f'{metric_thresh}'
+    if not isinstance(area_thresh, str):
+        area_thresh = f'{area_thresh}'
+    if not isinstance(ratio_thresh, str):
+        ratio_thresh = f'{ratio_thresh}'
+
+    config = {
+        "DIR":{
+            "DATA":data_dir,
+            "DNET":dnet_dir,
+            "TRACK": track_dir,
+            "LOG":log_dir,
+        },
+        "THRESH":{
+            "METRIC":metric_thresh,
+            "AREA":area_thresh,
+            "RATIO":ratio_thresh,
+        }
+    }
+
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+
+def read_yaml(file_path):
+    """Read a yaml file.
+
+    Parameters
+    ----------
+    file_path: str
+        Location of yaml file.
+    
+    Returns
+    -------
+    contents of yaml file.
+    
+    """
+    with open(file_path, "r") as f:
+        return yaml.safe_load(f)
+    
+def compute_drought_tracks(config_path, client, override=False):
+    """Computes drought tracks from a network given configurations.
+
+    This is the parent function for extract_drought_tracks, and by
+    extension, collect_drought_tracks. It handles all of the nitty
+    gritty formating and computations for getting tracks.
+
+    Parameters
+    ----------
+    config_path: str
+        Location of the configuration file created by write_config.
+    client
+        Dask client for parallelism.
+    override: boolean
+        Whether to overwrite existing files, defaults False so that
+        the function will complete without any new changes if 
+        the track file named in configurations already exists.
+    
+    """
+
+    config = read_yaml(config_path)
+    data_dir = config['DIR']['DATA']
+    dnet_dir = config['DIR']['DNET']
+    track_dir = config['DIR']['TRACK']
+    log_dir = config['DIR']['LOG']
+
+    metric_thresh = np.float64(config['THRESH']['METRIC'])
+    area_thresh = np.float64(config['THRESH']['AREA'])
+    ratio_thresh = np.float64(config['THRESH']['RATIO'])
+
+    # load in data
+    print('Lazy Data Load')
+    dm_path = '/pool0/home/steinadi/data/drought/drought_impact/data/drought_measures'
+
+    data = xr.open_dataarray(data_dir)
+    print('... Data ready')
+
+    # compute drought networks if not already made     
+
+    var_dnet = dnet.DroughtNetwork.unpickle(dnet_dir)          
+
+    # tossing in an override
+    if not os.path.exists(track_dir) or override:
+
+        try:
+            os.remove(track_dir)
+        except:
+            pass
+
+        print(f'Loading {data.name} ...')
+        data.load()
+        print(f'... Done')
+
+        x_coords = data.x.values
+        y_coords = data.y.values
+
+        coord_meta = (
+            np.min(y_coords), np.max(y_coords), len(y_coords),
+            np.min(x_coords), np.max(x_coords), len(x_coords)
+        )
+
+        var_tracks = extract_drought_tracks(
+            net=var_dnet,
+            coord_meta=coord_meta,
+            client=client,
+            log_dir=log_dir,
+            ratio_thresh=ratio_thresh
+        )
+
+        f = open(track_dir, 'wb')
+        pickle.dump(var_tracks, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+
+        x_coords = None
+        y_coords = None
+        coord_meta = None
+        var_tracks = None
+        f = None
+
+    var_dnet = None
+    del data
+
+    gc.collect()
+
+def filter_track(tracks, track_filter):
+    """Filter out tracks based on filter.
+
+    Parameters
+    ----------
+    tracks: list
+        Tracks to filter out
+    track_filter
+        Which tracks to exclude.
+
+    Returns
+    -------
+    list
+        filtered tracks.
+    
+    """
+    filtered_tracks = []    
+    for i, track in enumerate(tracks):
+        if not i in track_filter:
+            filtered_tracks.append(track)
+    return filtered_tracks
+
+def prune_tracks(dtd):
+    """Prunes tracks based on single-termination point requirement.
+
+    Parameters
+    ----------
+    dtd: dict
+        Drought track dictionary, expecting 'x' to have
+        horizontal coordinates, 'y' to have vertical coordinates,
+        't' to have temporal coordinates, and 's' to have the 
+        area of each drought blob. All other keys will also
+        be filtered.
+
+    Returns
+    -------
+    dict
+        Drought track dictionary filtered.
+    
+    """
+    x_tracks = dtd['x']
+    y_tracks = dtd['y']
+    t_tracks = dtd['t']
+    s_tracks = dtd['s']
+
+    txy_points = create_txy_points(x_tracks, y_tracks, t_tracks)
+    like_terminations = find_like_terminations(txy_points)
+    area_filter = create_area_filter(s_tracks, like_terminations)
+
+    filtered_dtd = dict()
+    for key in dtd.keys():
+        filtered_dtd[key] = filter_track(dtd[key], area_filter)
+
+    return filtered_dtd
+
+def remove_singulars(dtd):
+    """Removes tracks with only a single event.
+
+    Parameters
+    ----------
+    dtd: dict
+        Drought track dictionary, expecting to have 't' as 
+        temporal coordinates. All other keys will also be
+        filtered.
+    
+    Returns
+    -------
+    dict
+        Drought track dictionary without singular events.
+    """
+    lengths = [len(track) for track in dtd['t']]
+    filter = np.array(lengths) > 1
+
+    filtered_dtd = dict()
+    for key in dtd.keys():
+        filtered_dtd[key] = [dtd[key][i] for i in np.where(filter)[0]]
+
+    return filtered_dtd
+
+def dm_to_usdmcat(da:xr.DataArray, percentiles = [30, 20, 10, 5, 2]):
+    """Categorizes drought measure based on USDM categories.
+
+    Uses the mapping scheme presented by USDM (https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx)
+    Where Neutral is -1, D0 is 0, D1 is 1, D2, is 2, D3 is 3, and D4 is 4.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Contains data values.
+    percentiles: array-like
+        Inculsive upperbounds for D0, D1, D2, D3, and D4 in that order, where anything greater than the upperbound for D0 is
+        considered Neutral. It is assumed that 0 is the lower
+        bound for D4.
+    
+    Returns
+    -------
+    xr.DataArray
+        DataArray formatted the same as da but using USDM categories.
+
+    """
+
+    # make sure we don't overwrite the original
+    da_copy = da.copy()
+    # can only do boolean indexing on the underlying array
+    da_vals = da.values
+    da_vals_nonnan = da_vals[np.isnan(da_vals) == False]
+    # calculate percentiles
+    (p30, p20, p10, p5, p2) = np.percentile(da_vals_nonnan.ravel(), percentiles)
+    # get a copy to make sure reassignment isn't compounding
+    da_origin = da_vals.copy()
+
+    # assign neutral
+    da_vals[da_origin > p30] = -1
+    # assign D0
+    da_vals[(da_origin <= p30)&(da_origin > p20)] = 0
+    # assign D1
+    da_vals[(da_origin <= p20)&(da_origin > p10)] = 1
+    # assign D2
+    da_vals[(da_origin <= p10)&(da_origin > p5)] = 2
+    # assign D3
+    da_vals[(da_origin <= p5)&(da_origin > p2)] = 3
+    # assign D4
+    da_vals[(da_origin <= p2)] = 4
+
+    # put them back into the dataarray
+    da_copy.loc[:,:] = da_vals
+
+    return da_copy
+
+def dm_to_usdmcat_multtime(ds:xr.Dataset, percentiles=[30, 20, 10, 5, 2]):
+    """Categorizes drought measure based on USDM categories for multiple times.
+    
+    See dm_to_usdmcat for further documentation.
+    
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Data at multiple time values as the coordinate 'time'.
+    
+    Returns
+    -------
+    xr.Dataset
+        Drought measure categorized by dm_to_usdmcat.
+    """
+    
+    return dm_to_usdmcat(xr.concat([ds.sel(time=t) for t in ds['time'].values], dim='time'), percentiles)
