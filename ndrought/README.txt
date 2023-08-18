@@ -1,1 +1,0 @@
-The ndrought package, examining n dimensions of drought, contains functionality for wrangling and comparing various forms of drought.
