@@ -1,8 +1,19 @@
+"""Drought network used for organizing data.
+
+This module contains the DroughtNetwork and its
+EventNodes that are used to construct events, threads,
+and networks.
+
+updated: 8.16.2023
+author: a. stein
+
+"""
+
 from multiprocessing import Event
 import networkx as nx
 import numpy as np
 import matplotlib as mpl
-import ndrought.wrangle_v11 as wrangle
+import ndrought.wrangle as wrangle
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
 import pickle

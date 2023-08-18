@@ -2,7 +2,7 @@
 
 This module contains various helper functions for accessing, converting, and manipulating data used in nDrought.
 
-Updated: 3.31.2023
+Updated: 8.16.2023
 Author: a. stein
 
 """
@@ -17,7 +17,7 @@ import geopandas as gpd
 import matplotlib as plt
 from tqdm.autonotebook import tqdm
 
-import drought.drought_impact.ndrought.drought_network as dnet
+import ndrought.drought_network as dnet
 
 import pickle
 
@@ -1260,7 +1260,8 @@ def to_y(y, y_meta):
         Vertical coordinates in coordinate space.
     """
     y_min, y_max, y_spacing = y_meta
-    return ((y_min-y_max)/y_spacing)*(y)+y_max
+    y_total = np.abs((y_max-y_min)/y_spacing).round()
+    return ((y_min-y_max)*(y/y_total))+y_max
 
 def to_x(x, x_meta):
     """Converts index space to x coordinates.
@@ -1279,7 +1280,8 @@ def to_x(x, x_meta):
     
     """
     x_min, x_max, x_spacing = x_meta
-    return ((x_max-x_min)/x_spacing)*(x)+x_min
+    x_total = np.abs((x_max-x_min)/x_spacing).round()
+    return ((x_max-x_min)*(x/x_total))+x_min
 
 def to_xy(coord, coord_meta):
     """Converst index space to x,y coordinates.
