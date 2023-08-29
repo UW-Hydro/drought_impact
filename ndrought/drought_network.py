@@ -13,18 +13,23 @@ from multiprocessing import Event
 import networkx as nx
 import numpy as np
 import matplotlib as mpl
-import ndrought.wrangle as wrangle
 import matplotlib.pyplot as plt
 from tqdm.autonotebook import tqdm
 import pickle
 from datetime import datetime
 import os
+import pandas as pd
 
 import ndrought.plotting as ndplot
 
 import matplotlib.animation
 from matplotlib.animation import FuncAnimation
 plt.rcParams["animation.html"] = "html5"
+
+import skimage
+
+from skimage.color import rgb2gray
+from skimage.measure import regionprops_table
 
 
 class EventNode():
@@ -156,13 +161,61 @@ class EventNode():
 
         return thread
 
+def identify_drought_blob(vals:np.ndarray, threshold=1):
+    """Using sci-kit image, identify drought event blobs.
+
+    Parameters
+    ----------
+    vals: np.ndarray
+        Spatial values for drought data categorized
+        according to the USDM scheme for a single
+        time step.
+
+    Returns
+    -------
+    pd.DataFrame
+        Drought blobs using connectivity 2 from
+        skimage.measure.label. Blobs are binary
+        definitions of drought, where the measure
+        exceeds D1. Each blob is provided with
+        it's area, bbox, convex_area, and coordinates
+        of all cells contained within the blob.    
+    """
+
+    # first we're going to make this binary
+    # by setting data in a drought to 1 and
+    # not in a drought to 0, including nan
+
+    vals[(vals < threshold) | np.isnan(vals)] = 0
+    vals[vals > 0] = 1
+
+    # now we are going to convert to RGBL
+    (h, w) = vals.shape
+    t = (h, w, 3)
+    A = np.zeros(t, dtype=np.uint8)
+    for i in range(h):
+        for j in range(w):
+            # since we already made it binary, this
+            # will make 1 vals be white and 0 vals
+            # be black in our RGB array
+            color_val = 255*vals[i,j]
+            A[i, j] = [color_val, color_val, color_val]
+
+    # connectivity 2 will consider diagonals as connected
+    blobs = skimage.measure.label(rgb2gray(A) > 0, connectivity=2)
+
+    properties =['area','bbox','convex_area','coords']
+    df = pd.DataFrame(regionprops_table(blobs, properties=properties))
+    df['drought_id'] = np.nan*np.zeros(len(df))
+
+    return df
 
 def create_EventNodes(vals:np.ndarray, time=0, id=0, threshold=1, area_threshold=0):
     """Creates an EventNode if drought blob exists.
 
     While the EventNode and DroughtNetwork class are
     helpful for housing the drought blobs, we still need
-    to transfer the data from wrangle.identify_drought_blob
+    to transfer the data from identify_drought_blob
     into the classes. That's where this function comes in.
 
     Parameters
@@ -185,7 +238,7 @@ def create_EventNodes(vals:np.ndarray, time=0, id=0, threshold=1, area_threshold
         found, as well as what the next available id is.
 
     """
-    df = wrangle.identify_drought_blob(vals, threshold)
+    df = identify_drought_blob(vals, threshold)
     nodes = []
     for i in np.arange(len(df)):
         if df['area'].values[i] > area_threshold:

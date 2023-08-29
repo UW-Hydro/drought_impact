@@ -21,11 +21,6 @@ import ndrought.drought_network as dnet
 
 import pickle
 
-import skimage
-
-from skimage.color import rgb2gray
-from skimage.measure import regionprops_table
-
 import pyproj
 
 import os
@@ -594,56 +589,6 @@ def compute_usdmcat_com_coords(da:xr.DataArray):
     com_y_coords = transform_index_to_coords(np.array(com_y_list), da.lat.values)
 
     return com_x_coords, com_y_coords
-
-def identify_drought_blob(vals:np.ndarray, threshold=1):
-    """Using sci-kit image, identify drought event blobs.
-
-    Parameters
-    ----------
-    vals: np.ndarray
-        Spatial values for drought data categorized
-        according to the USDM scheme for a single
-        time step.
-
-    Returns
-    -------
-    pd.DataFrame
-        Drought blobs using connectivity 2 from
-        skimage.measure.label. Blobs are binary
-        definitions of drought, where the measure
-        exceeds D1. Each blob is provided with
-        it's area, bbox, convex_area, and coordinates
-        of all cells contained within the blob.    
-    """
-
-    # first we're going to make this binary
-    # by setting data in a drought to 1 and
-    # not in a drought to 0, including nan
-
-    vals[(vals < threshold) | np.isnan(vals)] = 0
-    vals[vals > 0] = 1
-
-    # now we are going to convert to RGBL
-    (h, w) = vals.shape
-    t = (h, w, 3)
-    A = np.zeros(t, dtype=np.uint8)
-    for i in range(h):
-        for j in range(w):
-            # since we already made it binary, this
-            # will make 1 vals be white and 0 vals
-            # be black in our RGB array
-            color_val = 255*vals[i,j]
-            A[i, j] = [color_val, color_val, color_val]
-
-    # connectivity 2 will consider diagonals as connected
-    blobs = skimage.measure.label(rgb2gray(A) > 0, connectivity=2)
-
-    properties =['area','bbox','convex_area','coords']
-    df = pd.DataFrame(regionprops_table(blobs, properties=properties))
-    df['drought_id'] = np.nan*np.zeros(len(df))
-
-    return df
-
 
 def connect_blobs_over_time(df_1:pd.DataFrame, df_2:pd.DataFrame):
     """Identify blobs shared between time frames.
@@ -1260,13 +1205,14 @@ def to_y(y, y_meta):
         Vertical coordinates in coordinate space.
     """
     y_min, y_max, y_spacing = y_meta
+
     y_total = np.abs((y_max-y_min)/y_spacing).round()
     return ((y_min-y_max)*(y/y_total))+y_max
 
 def to_x(x, x_meta):
     """Converts index space to x coordinates.
 
-    Parameters
+    Parameters`
     ----------
     x: float or array-like
         Horizontal coordinates in index space.
@@ -1280,6 +1226,7 @@ def to_x(x, x_meta):
     
     """
     x_min, x_max, x_spacing = x_meta
+
     x_total = np.abs((x_max-x_min)/x_spacing).round()
     return ((x_max-x_min)*(x/x_total))+x_min
 
@@ -1306,6 +1253,79 @@ def to_xy(coord, coord_meta):
 
     y, x = coord
     return (to_x(x, x_meta), to_y(y, y_meta))
+
+def _to_y(y, y_meta):
+    """Hidden function for extract_drought_tracks.
+    
+    Converts index space to y coordinates. If using
+    it outside of extract_drought_tracks, call to_y.
+
+    Parameters
+    ----------
+    y: float or array-like
+        Vertical coordinates in index space.
+    y_meta: tuple
+        Expects (y_min, y_max, y_spacing)
+    
+    Returns
+    -------
+    float or array-like
+        Vertical coordinates in coordinate space.
+    """
+    y_min, y_max, y_spacing = y_meta
+
+    return ((y_min-y_max)/y_spacing)*y+y_max
+
+def _to_x(x, x_meta):
+    """Hidden function for extract_drought_tracks.
+    
+    Converts index space to x coordinates. If using
+    it outside of extract_drought_tracks, call to_x.
+
+    Parameters`
+    ----------
+    x: float or array-like
+        Horizontal coordinates in index space.
+    x_meta: tuple
+        Expects (x_min, x_max, x_spacing).
+
+    Returns
+    -------
+    float or array-like
+        Horizontal coordinates in coordinate space.
+    
+    """
+    x_min, x_max, x_spacing = x_meta
+
+    return ((x_max-x_min)/x_spacing)*x + x_min
+
+def _to_xy(coord, coord_meta):
+    """Hidden function for extract_drought_tracks.
+    
+    Converts index space to x,y coordinates. If using
+    it outside of extract_drought_tracks, call to_xy.
+
+    Parameters
+    ----------
+    coord
+        Expects (y, x) in index space.
+    coord_meta
+        Expects (y_min, y_max, y_spacing, x_min, 
+        x_max, x_spacing).
+    
+    Returns
+    -------
+    tuple
+        (x,y) in coordinate space.
+    """
+    y_min, y_max, y_spacing, x_min, x_max, x_spacing = coord_meta
+
+    y_meta = (y_min, y_max, y_spacing)
+    x_meta = (x_min, x_max, x_spacing)
+
+    y, x = coord
+    return (_to_x(x, x_meta), _to_y(y, y_meta))
+
 
 def collect_drought_track(args):
     """Collects drought tracks in parallel.
@@ -1416,7 +1436,7 @@ def extract_drought_tracks(net, coord_meta, client, log_dir, cmap=plt.cm.get_cma
     
     """
 
-    net_centroids = {node.id:(*to_xy(node.coords.mean(axis=0), coord_meta), node.time, len(node.coords)) for node in net.nodes}
+    net_centroids = {node.id:(*_to_xy(node.coords.mean(axis=0), coord_meta), node.time, len(node.coords)) for node in net.nodes}
 
     x_tracks = []
     y_tracks = []
@@ -1581,7 +1601,11 @@ def compute_drought_tracks(config_path, client, override=False):
 
     # compute drought networks if not already made     
 
-    var_dnet = dnet.DroughtNetwork.unpickle(dnet_dir)          
+    if os.path.exists(dnet_dir):
+        var_dnet = dnet.DroughtNetwork.unpickle(dnet_dir)            
+    else:
+        var_dnet = dnet.DroughtNetwork(data.values, name=f'{data.name.upper()} Drought Network', area_threshold=area_thresh, threshold=metric_thresh)
+        var_dnet.pickle(dnet_dir)        
 
     # tossing in an override
     if not os.path.exists(track_dir) or override:

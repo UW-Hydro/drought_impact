@@ -6,7 +6,7 @@ Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping w
 Researchers: adi stein, Bart Nijssen, Katherine Hegewisch, John Abatzoglou    
 README author: adi stein
 
-Updated: 1.3.2023    
+Updated: 8.22.2023    
 
 ------------------------------------------
 
@@ -18,7 +18,7 @@ A note on perspective: I am a graduate student at the UW studying Hydrology thro
 
 -------------------------------------------
 
-## Abstract
+## Abstract - v.1
 
 Drought definitions and drought metrics come in many different forms and it is not always clear which definition or metric is most useful for describing or forecasting drought impacts. Drought metrics range from those which only incorporate precipitation anomalies to more comprehensive measures such as the United States Drought Monitor (USDM), which incorporates on-the-ground observations of drought impacts to arrive at a consensus-based drought status. Here, we use a range of drought metrics, as reported in the Climate Toolbox (https://climatetoolbox.org/), to investigate their level of agreement in assessing drought conditions on the Columbia River Basin and evaluate what drought impacts they capture. 
 
@@ -29,6 +29,10 @@ Drought metrics will then be related to drought impacts determined from literatu
 -------------------------------------------
 
 ## State of Project
+
+8.22.2023
+
+I haven't been as regular about these as I initially hoped ... lessons for the future. The project is now wrapping up and coming to a close. I've performed parameter testing that is to be published in a paper for Journal of Hydrometeorology. 
 
 4.25.2022
 
