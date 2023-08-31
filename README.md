@@ -1,4 +1,4 @@
-# nDrought: Analysis of USDM capturing other forms of drought
+# nDrought: Analysis of metrics capturing various forms of drought
 
 Proposal Title: Improving Drought Indicators to Support Drought Impact Mitigation for Natural Resource Managment    
 Funding oppertunity: CPO 2020, NOAA-OAR-CPO-2020-2006076, 280819, NIDIS-Coping with Drought    
