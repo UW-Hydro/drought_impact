@@ -712,3 +712,29 @@ Gather national park service boundaries.
 Gather state park boundaries for WA and OR. (Correction: OR state parks was not completed)
 
 **Produces**: `geometry/wa_state_park_bounds.geojson`.
+
+------------------------------------------
+
+## tutorial
+
+### **`tutorial.ipynb`**
+a. stein 8.1.2023
+
+In this notebook we will cover how to use the `ndrought` package to:
+- convert non-USDM data to USDM categories
+- create a drought network
+- extract tracks or threads from the drought network
+
+We will use data from SPI 180d over Washington state as our example, available on hydroshare.
+
+### **`what_is_dnet.ipynb`**
+a. stein 8.30.2023
+
+Let's spend some time talking about the `DroughtNetwork`. In this tutorial we'll cover:
+- what is a drought network?
+- how to create a drought network
+- how to plot a drought network
+- how to manipulate a drought network
+- how to return to nonbinary values
+
+I'm assuming basic knowledge with Python3 in this tutorial and will not be going over how to read/write code. If you have not gone through `tutorial.ipynb` first, I recommend checking that out first for the motivation.

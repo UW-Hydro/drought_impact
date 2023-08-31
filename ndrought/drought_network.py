@@ -259,7 +259,7 @@ def create_EventNodes(vals:np.ndarray, time=0, id=0, threshold=1, area_threshold
 class DroughtNetwork:
 
     def __init__(self, data, threshold=1, area_threshold=0, name='drought_network'):
-        """
+        """Drought network for organizing events.
         
         Parameters
         ----------
@@ -267,6 +267,16 @@ class DroughtNetwork:
             Expecting zeroth dimension to be temporal
             while the first and second dimension are
             spatial.
+        threshold (optional)
+            What value to set as the cutoff for drought/
+            no-drought. Defaults as 1.
+        area_threshold (optional)
+            How many grid cells to set as a minimum 
+            threshold for how big a drought blob must be.
+            Defaults as 0 for no threshold.
+        name: str (optional)
+            What to call the drought network. Defaults as
+            'drought_network'
         """
         self.data = data.copy()
         data = self.data

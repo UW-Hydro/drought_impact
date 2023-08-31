@@ -10,7 +10,7 @@ Updated: 8.22.2023
 
 ------------------------------------------
 
-## Purpose & Persepctive
+## Purpose & Perspective
 
 The purpose of this document is not to summarize the already written proposal but to describe the current state of the project and my, (adi, the person writing this), thought process and goals. Any concerns about the status of this project after checking if this document has been updated recently should be directed to my email: steinadi@uw.edu
 
@@ -43,3 +43,28 @@ Currently I'm focusing on comparing SPI to USDM, developing the workflows to do 
 1.3.2023
 
 It has been a rather busy time since this last larger update. A wide variety of things have been developed, ultimately focusing on evolutionary comparison between metrics in a nexus instead of holding any singular metric as truth. This has led to a graph network sort of approach with the Drought Network. Work on the project was presented at the AGU Fall Meeting 2022.
+
+-------------------------------------------
+
+## Paper Notes - Drought Tracks & Threshold Experiment
+
+Notable notebooks: 
+- `notebooks/analysis/drought_tracks/drought_track_results_pruned.ipynb`
+    - contains tables for drought track results
+    - contains centroid points plot
+- `notebooks/analysis/drought_tracks/thresh_experiments_*_all.ipynb`
+    - contains plots for threshold experiments, only spi30d was used in the paper
+- `notebooks/plotting/total_area_in_drought.ipynb`
+    - contains total area in D1 or greater drought
+    - contains examples of UDSM, SPI30d, and SPI180d at D1 or greater plots
+
+Notable scripts:
+- `scripts/compute_drought_tracks_config.py` w/ `run_thresh_exp_*.py`
+    - runs the drought threshold experiment for USDM, SPI30d, SPI180d
+    - data is stored in `data/thresh_experiments`
+
+-------------------------------------------
+
+## Using `ndrought`
+
+To use the `ndrought` package, you will need to have the folder containing `ndrought` added to your system path. You can do this using `sys.path.append(ndrought_directory)` where `ndrought_directory` is the path to the folder that you have forked from github.
