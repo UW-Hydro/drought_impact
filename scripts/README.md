@@ -38,7 +38,7 @@ Computes lagged r correlation between timeseries for USDM, SPI, SPEI, EDDI, PDSI
 Computes lagged r correlation between timeseries for USDM, SPI, SPEI, EDDI, PDSI, and GRACE for Washington state.
 
 ## **`create_track_tree.py`**
-Takes drought tracks from a drought track dictionary (dtd) and 
+Takes drought tracks from a drought track dictionary (dtd) and makes network trees for analysis.
 
 ## **`graph_dnet.py`**
 An attempt to plot USDM and PDSI linked together by overlapping nodes.
